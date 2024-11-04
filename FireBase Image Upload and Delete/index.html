@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Firebase Image Upload</title>
+    <!-- Add Bootstrap CSS -->
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+    />
+    <link
+     rel="stylesheet"
+     href="./style.css"
+    />
+  </head>
+
+  <body>
+
+    <div class="container">
+
+      <div id="LogoImageContainer">
+        <img id="LogoImage" src="" alt="Logo Image" />
+        <span>Images in the data base</span>
+      </div>
+      <hr>
+      <h5>Images in the Rotaion :</h5>
+      <!-- Image Carousel -->
+      <div id="imageCarousel" class="carousel slide mt-5" data-ride="carousel">
+        <div class="carousel-inner">
+          <!-- Carousel items will be dynamically added here -->
+        </div>
+        <a
+          class="carousel-control-prev"
+          href="#imageCarousel"
+          role="button"
+          data-slide="prev"
+        >
+          <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+          <span class="sr-only">Previous</span>
+        </a>
+        <a
+          class="carousel-control-next"
+          href="#imageCarousel"
+          role="button"
+          data-slide="next"
+        >
+          <span class="carousel-control-next-icon" aria-hidden="true"></span>
+          <span class="sr-only">Next</span>
+        </a>
+      </div>
+      <!-- Buttons for Upload Image and Choose File -->
+      <div class="d-flex">
+        <!-- Container for file name and preview under the Choose Image button -->
+        <div class="choose-image">
+          <label class="btn btn-secondary">
+            Choose Image
+            <input
+              type="file"
+              id="imageInput"
+              accept="image/*"
+              style="display: none"
+              onchange="previewImage('preview')"
+            />
+          </label>
+        </div>
+        <!-- Button to Upload Image -->
+        <button class="btn btn-primary upload-button" onclick="uploadImage()">
+          Upload Image
+        </button>
+      </div>
+
+      <div id="previewContainer">
+        <h6 id="fileName">Please upload an image!</h6>
+        <img id="filePreview" src="" alt="File Preview" />
+      </div>
+
+    </div>
+    <!-- Include Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/7.7.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/7.7.0/firebase-database.js"></script>
+  
+    <!-- Include JQuery -->
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
+    <!-- Add Bootstrap JS and Popper.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+
+    <!-- Include custom script -->
+    <script src="./script.js"></script>
+   
+    <!-- Add Bootstrap modal for custom messages -->
+    <div class="modal" tabindex="-1" role="dialog" id="customModal">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="customModalLabel"></h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body" id="customModalBody">
+            <!-- Custom message content -->
+          </div>
+          <div class="modal-footer" id="customModalFooter">
+            <!-- Custom footer content-->
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </body>
+</html>
