@@ -15,13 +15,8 @@ app.use(express.urlencoded({extended:false}));
 const port = process.env.PORT || 3000;
 const dbName = process.env.dbName;
 
-// method 1 
-// const dbUri = `mongodb+srv://eyasbzour:mongoDB1234@test.tyuuj.mongodb.net/${dbName}?retryWrites=true&w=majority`;
-// mongoose.connect(dbUri,{
-//     autoIndex: true
-// })
-//method 2 putting the name in connect method
-const dbUri = `mongodb+srv://eyasbzour:mongoDB1234@test.tyuuj.mongodb.net/?retryWrites=true&w=majority`;
+
+const dbUri = `dbUri`;
 mongoose.connect(dbUri,{
     dbName:`${dbName}`,
     autoIndex: true
