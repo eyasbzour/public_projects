@@ -7,6 +7,8 @@ Anything the reader was unsure of is highlighted in the file, with a note saying
 
 It runs two ways: as a Windows program (an installer, no browser or server needed) or as a web app on an office server.
 
+![Pages, the photo and its text side by side](docs/screenshots/workspace.png)
+
 ## What it does
 
 - **Drafts** are saved as you work. The home list can be searched by document name, person or page count, and sorted by any column.
@@ -41,6 +43,21 @@ It runs two ways: as a Windows program (an installer, no browser or server neede
   as a numbered footnote in PDF and PNG. Formats: `.docx`, PDF, `.odt`, PNG (one image, or a `.zip` for several pages) and `.txt`.
 - "قراءة الكل والإنتاج" reads every unread page and produces the file in **one click**.
 - It works at any browser zoom, from the keyboard alone, and in light and dark themes, with 44 px touch targets on phones.
+
+## Screenshots
+
+The pages in these pictures are made-up test letters.
+
+| | |
+|---|---|
+| ![A clicked line shown on the photo](docs/screenshots/line-on-photo.png) | ![A highlighted word with a second reader's suggestion](docs/screenshots/flagged-word.png) |
+| Click a line to see it on the photo, and read it again with another reader. | A highlighted word, its spot on the photo, and what a second reader made of it. |
+| ![A table cell shown on the photo](docs/screenshots/table-cell.png) | ![Formatting tools over selected text](docs/screenshots/text-tools.png) |
+| Table cells have their own spot on the photo. | The tools for selected text appear right above it. |
+| ![The drafts list](docs/screenshots/drafts.png) | ![Template, font and output options](docs/screenshots/output.png) |
+| Drafts can be searched by name, person or page count. | The template, the document's font and size, and what goes in the file. |
+| ![The workspace in the dark theme](docs/screenshots/dark.png) | ![The text and the photo on a phone](docs/screenshots/phone.png) |
+| The dark theme. | On a phone the pages, the photo and the text become tabs. |
 
 ## Windows program
 

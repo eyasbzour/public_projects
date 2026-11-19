@@ -32,8 +32,10 @@ const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
 
   let { text, lines } = await info();
   const lineText = (k, t = text, ls = lines) => t.slice(ls[k][4], k + 1 < ls.length ? ls[k + 1][4] - 1 : t.length);
-  // 1. a click in the second line shows that line on the photo
+  // 1. a click in the second line shows that line on the photo, and changes nothing in the draft
+  const saved0 = await page.textContent('#saveState');
   await clickAt(lines[1][4] + 3);
+  check('a click alone leaves the draft unchanged', (await page.textContent('#saveState')) === saved0, saved0);
   check('a click into the text opens the line panel', await page.isVisible('#linePop'));
   check('it offers the line and the paragraph', await page.isVisible('#linePickLine') && await page.isVisible('#linePickPara'));
   const crop = async () => page.$eval('#lineCrop', (c) => ({ w: c.offsetWidth, h: c.offsetHeight, shown: !c.classList.contains('hidden') }));

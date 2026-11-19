@@ -289,6 +289,10 @@
 
   // ------------------------------------------------------------------ draft open/save
   async function openDraft(id) {
+    // straight from another draft (back / forward, a link): save it and close its editor first, as going home
+    // does; its editor left open would copy its text into the new draft's first page
+    if (draft && dirty) await saveDraft();
+    destroyEditor();
     try { draft = await api('/api/drafts/' + id); }
     catch (e) { toast('تعذر فتح المسودة: ' + e.message, true); location.hash = ''; return; }
     dirty = false; current = 0;
@@ -493,7 +497,10 @@
       renderFlags(); fillVersions(); updateReadState(); if (toolbar) toolbar.update(); return;  // also clears the last draft's status
     }
     $('photoImg').src = imgUrl(p);
-    $('photoLabel').textContent = `صفحة ${i + 1} من ${draft.pages.length}` + (p.file ? ` · ${p.file}` : '');
+    // the file name in its own direction box, and what follows its last Arabic word ("1.jpg") left to right,
+    // so "تقرير 1.jpg" does not show as "jpg.1 تقرير"
+    const name = p.file && p.file.replace(/[^\u0600-\u06FF\s][^\u0600-\u06FF]*$/, (tail) => '\u2066' + tail + '\u2069');
+    $('photoLabel').replaceChildren(`صفحة ${i + 1} من ${draft.pages.length}`, ...(name ? [' · ', el('bdi', {}, name)] : []));
     applyPhotoTransform();
     renderEditor(); fillVersions(); updateReadState();
   }

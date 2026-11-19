@@ -157,7 +157,9 @@
     const editor = new T.Editor({
       element: el,
       extensions: [
-        T.StarterKit.configure({ heading: { levels: [1, 2, 3] }, code: false, codeBlock: false, horizontalRule: false, link: false }),
+        // no trailingNode: it added an empty paragraph after a last heading or table on the first click, so merely
+        // clicking marked the draft changed and the Word file got a stray paragraph (the gap cursor still types there)
+        T.StarterKit.configure({ heading: { levels: [1, 2, 3] }, code: false, codeBlock: false, horizontalRule: false, link: false, trailingNode: false }),
         T.TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['right', 'center', 'left', 'justify'] }),
         Table, T.TableRow, T.TableHeader, TableCell,
         T.TextStyle, T.Color, T.BackgroundColor, T.FontSize,
@@ -181,6 +183,10 @@
     });
 
     const figureSelected = () => editor.isActive('figure');
+    // a command chain with the editor focused now, not a frame later: Tiptap's own focus waits a frame when the
+    // editor lost focus (to a palette or the table picker), and a click in the size box within that frame had its
+    // typing land in the text, over the selection
+    const focused = () => { if (!editor.view.hasFocus()) editor.view.focus(); return editor.chain().focus(); };
     // the document range of a flagged word's <mark>, or null once it is gone from the page
     const flagRange = (markEl) => {
       try {
@@ -206,22 +212,22 @@
       editor,
       getBlocks: () => window.BlocksDoc.docToBlocks(editor.getJSON()),
       destroy: () => editor.destroy(),
-      chain: () => editor.chain().focus(),
+      chain: focused,
 
       // a new block (table, picture) goes after the block the cursor is in, not into the middle of a line
       insertBlock(json) {
         const sel = editor.state.selection;
         const pos = sel.$from.depth ? sel.$from.after(1) : sel.to;
-        editor.chain().focus().insertContentAt(pos, json).run();
+        focused().insertContentAt(pos, json).run();
       },
 
       // side: 'right' | 'center' | 'left' | 'justify', as the buttons show it (pictures sit on right-to-left pages)
       align(side) {
         if (figureSelected()) {
           const a = { right: null, center: 'center', left: 'end' }[side];
-          editor.chain().focus().updateAttributes('figure', { align: a }).run();
-        } else if (editor.isActive({ textAlign: side })) editor.chain().focus().unsetTextAlign().run();
-        else editor.chain().focus().setTextAlign(side).run();
+          focused().updateAttributes('figure', { align: a }).run();
+        } else if (editor.isActive({ textAlign: side })) focused().unsetTextAlign().run();
+        else focused().setTextAlign(side).run();
       },
       alignActive(side) {
         if (figureSelected()) return ({ start: 'right', center: 'center', end: 'left' })[editor.getAttributes('figure').align || 'start'] === side;
@@ -254,7 +260,7 @@
       flagSelection(note) {
         const { from, to, empty } = editor.state.selection;
         if (empty || figureSelected()) return null;
-        editor.chain().focus().setMark('flag', { note: note || '', box: null }).setTextSelection(to).run();
+        focused().setMark('flag', { note: note || '', box: null }).setTextSelection(to).run();
         const view = editor.view;
         return [...view.dom.querySelectorAll('mark.flag')].find((m) => {
           try { const at = view.posAtDOM(m, 0); return at >= from && at < to; } catch (e) { return false; }
@@ -349,7 +355,7 @@
 
       toggleTableLines() {
         const lined = !editor.getAttributes('table').borderless;
-        editor.chain().focus().updateAttributes('table', lined ? { borderless: true } : { borderless: false, lineless: false }).run();
+        focused().updateAttributes('table', lined ? { borderless: true } : { borderless: false, lineless: false }).run();
       },
     };
     el.docEditor = api;  // for the browser checks (tests/browser)

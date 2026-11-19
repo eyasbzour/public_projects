@@ -86,6 +86,7 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
     for (let i = 1; i < ps.length; i++) {
       const w = document.createTreeWalker(ps[i], NodeFilter.SHOW_TEXT); let t;
       while ((t = w.nextNode())) if (!t.parentElement.closest('mark') && t.nodeValue.trim().length > 4) {
+        ps[i].scrollIntoView({ block: 'center' });  // earlier checks may have pushed it below the visible part
         const r = document.createRange(); r.setStart(t, 1); r.setEnd(t, 2); const b = r.getBoundingClientRect();
         return { i, x: b.x + b.width / 2, y: b.y + b.height / 2 };
       }

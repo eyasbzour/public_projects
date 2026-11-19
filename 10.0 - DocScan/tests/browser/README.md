@@ -15,5 +15,6 @@ node e2e.js                   # a whole draft: upload, read, flag, produce every
 ```
 
 Others: `ui-check.js <id>` (panes, splitters, popovers), `search-check.js` (drafts table), `pop-check.js` (panels and windows),
-`tpl-check.js` (templates and document font), `english-check.js` (an English page, from `english-page.js`), `review-shots.js`
+`tpl-check.js` (templates and document font), `english-check.js` (an English page, from `english-page.js`),
+`switch-check.js <idA> <idB>` (going straight from one draft to another keeps both as they were), `review-shots.js`
 (screenshots and measurements of every screen for design reviews). Screenshots go to `shots/`.
