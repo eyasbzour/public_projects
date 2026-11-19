@@ -77,8 +77,8 @@ def run(engine_id: str, image_bytes: bytes, *, rotation: int = 0, cleanup: str =
     else:
         lines = nuqta_engine.run(img, spot) if engine_id == "nuqta" else (easyocr_engine if engine_id == "easyocr" else paddle_engine).run(img)
     ltr = direction == "ltr" or (direction == "auto" and ltr_page.is_ltr(lines))
-    if ltr and engine_id == "paddle":  # an English page: PaddleOCR's English recognizer reads it far better
-        lines = paddle_engine.run(img, "en")
+    if ltr and engine_id == "paddle":  # an English page: PaddleOCR's English recognizer reads it far better,
+        lines = paddle_engine.with_arabic(paddle_engine.run(img, "en"), lines)  # but not its Arabic words
     if engine_id in ("paddle", "easyocr", "nuqta"):
         low_conf = min(low_conf, BOX_ENGINE_LOW_CONF)
         if engine_id == "paddle" and not ltr and not spot and tesseract_engine.available("best", langs)[0]:

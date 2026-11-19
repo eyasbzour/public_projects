@@ -7,6 +7,7 @@ from __future__ import annotations
 import threading
 
 from .common import EngineError, Line, fragments_to_lines
+from .direction import ARABIC, LATIN
 
 _ocr = None
 _lock = threading.Lock()
@@ -58,6 +59,33 @@ def _fragments(result) -> list:
             box, (text, score) = item[0], item[1]
             frags.append((box, text, float(score)))
     return frags
+
+
+def with_arabic(en: list[Line], ar: list[Line]) -> list[Line]:
+    """An English page read by the English recognizer, with its Arabic text boxes as the Arabic recognizer read
+    them: the English one turns Arabic into Latin letters ("Lic 517" for "ثلاثة كشوف 517"). Both readings
+    find the same text boxes (one detector), and each word carries its text box."""
+    boxes: dict = {}
+    for ln in ar:
+        for w in ln.words:
+            boxes.setdefault(w.box, []).append(w)
+    arabic = [(b, ws) for b, ws in boxes.items() if b and len(ARABIC.findall(t := " ".join(w.text for w in ws))) > len(LATIN.findall(t))]
+
+    def same(a, b) -> bool:
+        ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0])) * max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+        return ix > 0.6 * min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
+
+    for ln in en:
+        words, used = [], set()
+        for w in ln.words:
+            k = next((k for k, (b, _) in enumerate(arabic) if w.box and same(b, w.box)), None)
+            if k is None:
+                words.append(w)
+            elif k not in used:
+                used.add(k)
+                words += arabic[k][1]
+        ln.words = words
+    return en
 
 
 def run(img, lang: str = "ar") -> list[Line]:

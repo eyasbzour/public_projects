@@ -12,10 +12,12 @@ import re
 import statistics
 from dataclasses import dataclass, field
 
+import numpy as np
 from PIL import Image, ImageOps
 
 BIDI_MARKS = re.compile(r"[‎‏‪-‮⁦-⁩]")
 HAS_LETTER = re.compile(r"[؀-ۿA-Za-z0-9]")
+CODE = re.compile(r'[{}\[\];]|":|=>')  # what a line of code or JSON has and a letter's line does not
 BULLETS = set("•●▪◦·-–✓✔➢►»«*○■□")  # with how readers misread a bullet ("»" for "•")
 
 
@@ -29,9 +31,13 @@ def load_image(data: bytes, rotation: int = 0, mode: str = "clean", min_width: i
     mode: "none"  - as is
           "clean" - grayscale, stretch contrast, upscale small photos
           "bw"    - clean + black/white threshold (helps faint or shadowed photos)
+    In every mode, light text on a dark background comes back as dark text on light: the readers, the
+    table lines and the ink colours all expect that (the boxes stay where they were).
     """
     img = Image.open(io.BytesIO(data))
     img = ImageOps.exif_transpose(img).convert("RGB")
+    if light_on_dark(img):
+        img = invert_lightness(img)
     if rotation % 360:
         img = img.rotate(-(rotation % 360), expand=True, fillcolor="white")
     if mode == "none":
@@ -44,6 +50,31 @@ def load_image(data: bytes, rotation: int = 0, mode: str = "clean", min_width: i
     if mode == "bw":
         g = g.point(lambda p, t=otsu_threshold(g): 255 if p > t else 0)
     return g.convert("RGB")
+
+
+def light_on_dark(img: Image.Image) -> bool:
+    """Light text on a dark background (a screenshot of a dark screen): most of the page is dark and its bright
+    pixels are thin strokes. A white sheet photographed on a dark table is one solid bright area instead."""
+    import cv2
+
+    g = np.asarray(img.convert("L"))
+    m = float(np.median(g[::4, ::4]))  # a sample is enough, and a light page stops here
+    if m >= 110:
+        return False
+    bright = (g >= m + 70).astype(np.uint8)
+    n = int(bright.sum())
+    if n < 0.005 * g.size or int((g <= m - 40).sum()) > n / 2:
+        return False
+    k = max(3, g.shape[1] // 200) | 1  # wider than a stroke of text, narrower than a sheet
+    return int(cv2.erode(bright, np.ones((k, k), np.uint8)).sum()) < 0.25 * n
+
+
+def invert_lightness(img: Image.Image) -> Image.Image:
+    """Dark becomes light and light dark, each colour keeping its hue (a red pen stays red): every channel moves
+    by the same amount, 255 - max - min."""
+    a = np.asarray(img, dtype=np.int16)
+    a = a + (255 - a.max(axis=2, keepdims=True) - a.min(axis=2, keepdims=True))
+    return Image.fromarray(a.astype(np.uint8))
 
 
 def otsu_threshold(gray: Image.Image) -> int:
@@ -315,6 +346,11 @@ def lines_to_blocks(lines: list[Line], low_conf: float, tables: list = (), size:
     left = min((ln.x0 for ln in lines), default=0)
     right = max((ln.x1 for ln in lines), default=size[0] if size else 1)
     min_gap = max(3 * h, 0.06 * (right - left))
+    # a new paragraph after a gap of 3/4 of a line; on a page set tighter than that (a screenshot, where the
+    # readers' boxes overlap from line to line), after a gap half a line wider than its usual one
+    by_top = sorted(lines, key=lambda ln: ln.y0)
+    gaps = [b.y0 - a.y1 for a, b in zip(by_top, by_top[1:])]
+    para_gap = min(0.75 * h, statistics.median(gaps) + 0.5 * h) if gaps else 0.75 * h
     table_cuts = lineless_tables(lines, h, right - left)
     for ln, cuts in zip(lines, table_cuts):
         if cuts:  # a row of a table printed without lines; rows of one table share the same cuts
@@ -339,9 +375,26 @@ def lines_to_blocks(lines: list[Line], low_conf: float, tables: list = (), size:
             out["lines"] = [frac(ln) + [at] for ln, at in zip(para, starts)]
         return out
 
+    def code_block(para: list[Line]) -> dict:
+        """Lines of code or JSON: one block that keeps each line on its own (a line break, "\n") and its indent
+        (spaces, from how far in the line starts; start is x1, as the page is right to left here)."""
+        start = max(ln.x1 for ln in para)
+        texts = [" ".join(w.text for w in ln.words) for ln in para]
+        cw = statistics.median((ln.x1 - ln.x0) / max(1, len(t)) for ln, t in zip(para, texts)) or 1
+        indents = [round((start - ln.x1) / cw) for ln in para]
+        segs: list[dict] = []
+        for k, ln in enumerate(para):
+            segs.append({"s": ("\n" if k else "") + " " * indents[k]})
+            segs += words_to_segs(ln.words, low_conf, size)
+        segs = [sg for sg in segs if sg["s"] or sg.get("note") is not None]
+        lens = [indents[k] + len(t) + 1 for k, t in enumerate(texts)]  # each line: its indent, its text, the break
+        return {"type": "p", "bold": False, "segs": segs, "align": "start", **spot(para, lens)}
+
     def para_block(para: list[Line]) -> dict | None:
         words = [w for ln in para for w in ln.words]
         lens = [sum(len(w.text) + 1 for w in ln.words) for ln in para]
+        if len(para) > 1 and sum(1 for ln in para if CODE.search(" ".join(w.text for w in ln.words))) >= 0.6 * len(para):
+            return code_block(para)
         btype = "p"
         item = para[0].extra.get("list")  # lists.mark_list_items
         if item:
@@ -391,7 +444,7 @@ def lines_to_blocks(lines: list[Line], low_conf: float, tables: list = (), size:
             outdented = item and x.x1 > para[0].x1 + 0.3 * h  # on the test page the indent is about half a line height
             if item and not outdented and not x.extra.get("list") and abs(x.x1 - para[0].x1) < 0.25 * h and para[-1].x0 > left + 3 * h:
                 x.extra["list"] = item
-            if para and (x.extra.get("list") or outdented or x.new_para or x.y0 - para[-1].y1 > 0.75 * h):
+            if para and (x.extra.get("list") or outdented or x.new_para or x.y0 - para[-1].y1 > para_gap):
                 flush()
             para.append(x)
         else:

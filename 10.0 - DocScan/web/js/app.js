@@ -1144,7 +1144,12 @@
     try { await api(`/api/templates/${t.id}?admin_token=${encodeURIComponent($('tplToken').value)}`, { method: 'DELETE' }); await reloadTemplates(); }
     catch (e) { toast(e.message, true); }
   }
+  // light, dark or the system's: applied at once and kept on this device (js/theme.js)
+  function showTheme() {
+    document.querySelectorAll('#setTheme button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pick === DocTheme.pick())));
+  }
   function openSettings() {
+    showTheme();
     $('setAuthor').value = settings.author; $('setClaude').value = settings.claudeKey;
     $('setGoogle').value = settings.googleKey; $('setRemember').checked = settings.remember;
     fillTemplateSelect(); $('dlgSettings').showModal();
@@ -1168,6 +1173,7 @@
     $('btnBack').onclick = () => { location.hash = ''; };
     $('btnSettings').onclick = openSettings;
     $('btnSettingsSave').onclick = saveSettings;
+    document.querySelectorAll('#setTheme button').forEach((b) => { b.onclick = () => { DocTheme.set(b.dataset.pick); showTheme(); }; });
     $('btnTplAdd').onclick = addTemplate;
     $('btnTplNew').onclick = () => openTemplateAdd(false);
     $('tplFile').onchange = () => { const f = $('tplFile').files[0]; $('tplFileName').textContent = f ? f.name : 'اختر الملف'; };

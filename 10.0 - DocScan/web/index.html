@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>تحويل الوثائق</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%230066d6%27/%3E%3Cpath d=%27M9 8h14M9 13h14M9 18h14M9 23h9%27 stroke=%27white%27 stroke-width=%272.5%27/%3E%3C/svg%3E">
+<script src="js/theme.js"></script>
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -287,6 +288,14 @@
       <button class="btn ghost small icon-only" value="cancel" formnovalidate aria-label="إغلاق">
         <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
       </button>
+    </div>
+    <div class="field">
+      <span id="setThemeHead">المظهر</span>
+      <div class="seg theme-seg" id="setTheme" role="group" aria-labelledby="setThemeHead">
+        <button class="btn small" type="button" data-pick="system" aria-pressed="true">حسب النظام</button>
+        <button class="btn small" type="button" data-pick="light" aria-pressed="false">فاتح</button>
+        <button class="btn small" type="button" data-pick="dark" aria-pressed="false">داكن</button>
+      </div>
     </div>
     <label class="field">اسمك (يظهر كاتب الملاحظات في Word)<input id="setAuthor"></label>
     <fieldset>

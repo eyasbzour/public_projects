@@ -105,15 +105,22 @@ def split_marks(lines: list[Line], colour: Image.Image, read_size: tuple[int, in
     # coloured ink no word covers: a signature or stamp the reader skipped
     import cv2
 
-    free = (coloured & ~covered).astype(np.uint8)
+    raw = coloured & ~covered
+    free = raw.astype(np.uint8)
     k = max(3, int(0.6 * h * sx))
     free = cv2.dilate(free, cv2.getStructuringElement(cv2.MORPH_RECT, (k, k)))
-    n, _, stats, _ = cv2.connectedComponentsWithStats(free, connectivity=8)
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(free, connectivity=8)
     for i in range(1, n):
         x, y, w, ht, area = stats[i]
         box = (x / sx, y / sy, (x + w) / sx, (y + ht) / sy)
-        if (box[2] - box[0]) * (box[3] - box[1]) >= (1.5 * h) ** 2:
-            out.append({"text": "", "box": box})
+        if (box[2] - box[0]) * (box[3] - box[1]) < (1.5 * h) ** 2:
+            continue
+        # the ink itself (before the dilation): under half a line tall it is a line drawn under or through
+        # the print (a red spellcheck squiggle on a screenshot, an underline), not words to type
+        rows = np.flatnonzero((raw[y:y + ht, x:x + w] & (labels[y:y + ht, x:x + w] == i)).any(axis=1))
+        if rows.size and rows[-1] - rows[0] + 1 < 0.5 * h * sy:
+            continue
+        out.append({"text": "", "box": box})
 
     # one mark per place: pieces that touch or nearly touch are one note, signature or stamp
     out.sort(key=lambda m: m["box"][1])

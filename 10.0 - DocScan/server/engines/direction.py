@@ -26,11 +26,47 @@ def is_ltr(lines: list[Line]) -> bool:
 
 def in_reading_order(lines: list[Line]) -> list[Line]:
     """Words of each line left to right (box engines list them right to left; the words inside one text box
-    keep their own order)."""
+    keep their own order), but a run of Arabic words right to left inside that: "Total: ثلاثة كشوف 517" kept
+    the order of its letters, and sorting by place had turned its Arabic words around."""
     for ln in lines:
         if ln.words and all(w.box for w in ln.words):
             ln.words.sort(key=lambda w: w.box[0])
+            ln.words = arabic_runs_rtl(ln.words)
     return lines
+
+
+def arabic_runs_rtl(words: list[Word]) -> list[Word]:
+    """Words in left-to-right place order, with each run of Arabic text boxes turned to right-to-left order. The
+    words of one text box stay together and in order; numbers and signs between two Arabic boxes join their run."""
+    units: list[list[Word]] = []
+    for w in words:
+        if units and units[-1][0].box == w.box:
+            units[-1].append(w)
+        else:
+            units.append([w])
+
+    def kind(u):
+        t = " ".join(w.text for w in u)
+        ar, la = len(ARABIC.findall(t)), len(LATIN.findall(t))
+        return "ar" if ar > la else ("en" if la else "")
+
+    out: list[Word] = []
+    run: list[list[Word]] = []
+    between: list[list[Word]] = []  # numbers and signs after the run so far: in it if more Arabic follows
+    for u in units + [None]:
+        k = kind(u) if u else "en"
+        if k == "ar":
+            run += between + [u]
+            between = []
+        elif not k and run:
+            between.append(u)
+        else:
+            for r in reversed(run):
+                out += r
+            for r in between + ([u] if u else []):
+                out += r
+            run, between = [], []
+    return out
 
 
 def mirror_lines(lines: list[Line], width: float) -> list[Line]:

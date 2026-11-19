@@ -23,6 +23,9 @@ It runs two ways: as a Windows program (an installer, no browser or server neede
   without lines. A row with a part on each side ("الرقم ... التاريخ") stays one row. Bulleted and numbered lists come out as
   lists, even when the reader missed the bullet, and bold or centered lines become headings. Alignment is kept, and English
   pages run left to right.
+- A screenshot of a dark screen is read as dark text on light, so a framed box does not become a table and red spellcheck
+  lines are not taken for handwriting. Code and JSON keep their line breaks and indents. On an English page, Arabic words are
+  read as Arabic and stay in their order.
 - Handwriting, signatures and stamps are not guessed into the text. Each one becomes a highlighted marker in its place,
   linked to its spot on the photo. PaddleOCR drops digits inside Arabic lines, so Tesseract reads the page too, and any number
   PaddleOCR missed is put back and highlighted.
@@ -42,7 +45,8 @@ It runs two ways: as a Windows program (an installer, no browser or server neede
   font and size, and real Word lists and headings. Highlighted text keeps its note, as a Word comment in `.docx` and `.odt` and
   as a numbered footnote in PDF and PNG. Formats: `.docx`, PDF, `.odt`, PNG (one image, or a `.zip` for several pages) and `.txt`.
 - "قراءة الكل والإنتاج" reads every unread page and produces the file in **one click**.
-- It works at any browser zoom, from the keyboard alone, and in light and dark themes, with 44 px touch targets on phones.
+- It works at any browser zoom, from the keyboard alone, and in light and dark themes (الإعدادات > المظهر: follow the system,
+  light or dark), with 44 px touch targets on phones.
 
 ## Screenshots
 

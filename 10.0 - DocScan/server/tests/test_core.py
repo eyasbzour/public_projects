@@ -195,3 +195,56 @@ def test_list_items_from_bullets_numbers_and_a_skipped_bullet():
     assert [w.text for w in lines[3].words] == ["أول"] and lines[3].extra["num"] == 1
     kinds = [b["type"] for b in lines_to_blocks(lines, 65)]
     assert kinds == ["li", "li", "p", "ol", "ol", "li"], kinds
+
+
+def test_dark_screenshot_of_json_reads_as_code_without_marks():
+    import io
+    from PIL import Image, ImageDraw
+    from engines.common import load_image
+    from engines.direction import arabic_runs_rtl
+    from engines.marks import split_marks
+
+    def png(img):
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        return buf.getvalue()
+
+    # light text on a dark screen, a red spellcheck squiggle under one word
+    shot = Image.new("RGB", (300, 150), (43, 43, 43))
+    d = ImageDraw.Draw(shot)
+    rows = ['{', '  "taxpayer": "100000009",', '  "hasIssues": true,', '  "details": [', '  ]', '}']
+    for k, t in enumerate(rows):
+        d.text((40, 40 + 18 * k), t, fill=(220, 220, 220))
+    d.line([(60 + 4 * i, 70 + (i % 2) * 3) for i in range(20)], fill=(230, 50, 50), width=1)
+    img = load_image(png(shot), 0, "none")
+    assert min(img.getpixel((5, 5))) > 200                      # the screen is light now...
+    r, g, _ = img.getpixel((60, 70))
+    assert r > g + 80                                           # ...and the red squiggle still red
+    lines = [Line([Word(t.strip(), 95, (40, 40 + 18 * k, 40 + 6 * len(t), 51 + 18 * k))], 40, 40 + 18 * k, 40 + 6 * len(t), 51 + 18 * k)
+             for k, t in enumerate(rows)]
+    kept, marks = split_marks(lines, img, img.size, 65)
+    assert marks == [] and len(kept) == len(rows)               # a squiggle is not handwriting
+
+    # a white sheet photographed on a dark table stays as it is
+    photo = Image.new("RGB", (600, 800), (40, 40, 40))
+    ImageDraw.Draw(photo).rectangle((100, 100, 500, 700), fill=(240, 240, 235))
+    assert load_image(png(photo), 0, "none").getpixel((5, 5)) == (40, 40, 40)
+
+    # code lines (here as the layout sees an English page: mirrored, so a line starts at its x1) keep their
+    # breaks and indents, in one block; the heading just above, closer than 3/4 of a line, is its own block
+    code = ['{', '"a": 1,', '"b": [', '2', ']', '}']
+    indent = [0, 2, 2, 4, 2, 0]
+    w = lambda t, x0, x1, y: Word(t, 95, (x0, y, x1, y + 20))  # noqa: E731
+    lines = [Line([w("Sample", 860, 920, 0), w("response", 930, 1000, 0)], 860, 0, 1000, 20)]
+    for k, (t, i) in enumerate(zip(code, indent)):
+        x1, y = 1000 - 10 * i, 27 + 14 * k
+        lines.append(Line([w(t, x1 - 10 * len(t), x1, y)], x1 - 10 * len(t), y, x1, y + 20))
+    blocks = lines_to_blocks(lines, 65, (), (1000, 200))
+    assert len(blocks) == 2 and "".join(sg["s"] for sg in blocks[0]["segs"]) == "Sample response"
+    text = "".join(sg["s"] for sg in blocks[1]["segs"])
+    assert text == '{\n  "a": 1,\n  "b": [\n    2\n  ]\n}'
+    assert blocks[1]["lines"][1][4] == text.index("\n") + 1    # a line starts where its indent does
+
+    # Arabic words on an English line, placed left to right, read right to left
+    words = [Word(t, 90, (x, 0, x + 10, 10)) for t, x in [('"21":', 0), ('عنها"', 20), ('يصرح', 40), ('517', 60), ('"ثلاثة', 80), ("}", 100)]]
+    assert " ".join(x.text for x in arabic_runs_rtl(words)) == '"21": "ثلاثة 517 يصرح عنها" }'

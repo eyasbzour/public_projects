@@ -39,39 +39,38 @@
   --topbar-h: 3.25rem;
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --chrome: oklch(26.5% 0.004 255);
-    --sunken: oklch(24% 0.004 255);
-    --surface: oklch(21.5% 0.004 255);
-    --canvas: oklch(17.5% 0.004 255);
-    --sheet: oklch(24.5% 0.004 255);
-    --well: oklch(14% 0.004 255);
-    --raised: oklch(38% 0.005 255);
-    --line: oklch(32% 0.005 255);
-    --line-strong: oklch(44% 0.006 255);
-    --ink: oklch(94% 0.003 255);
-    --muted: oklch(72% 0.006 255);
-    --fill-hover: oklch(98% 0.003 255 / .07);
-    --fill-active: oklch(98% 0.003 255 / .12);
-    --accent: oklch(72% 0.14 252);
-    --accent-fill: oklch(55% 0.19 258);
-    --accent-hover: oklch(51% 0.19 258);
-    --accent-ink: oklch(99% 0.003 255);
-    --accent-soft: oklch(32% 0.06 255);
-    --accent-line: oklch(58% 0.12 255);
-    --ok: oklch(76% 0.14 150);
-    --flag: oklch(44% 0.09 95);
-    --flag-strong: oklch(80% 0.14 90);
-    --flag-ink: oklch(93% 0.06 95);
-    --warn: oklch(80% 0.13 70);
-    --danger: oklch(73% 0.15 25);
-    --danger-soft: oklch(30% 0.06 25);
-    --shadow-1: 0 0 0 .5px oklch(100% 0 0 / .06), 0 1px 2px oklch(5% 0 0 / .4);
-    --shadow-2: 0 0 0 .5px oklch(100% 0 0 / .08), 0 4px 12px oklch(5% 0 0 / .3), 0 18px 44px oklch(5% 0 0 / .5);
-    --shadow-page: 0 0 0 .5px oklch(100% 0 0 / .05), 0 10px 30px oklch(5% 0 0 / .45);
-    color-scheme: dark;
-  }
+/* dark: js/theme.js sets data-theme from Settings (light, dark, or the system's choice, followed live) */
+:root[data-theme="dark"] {
+  --chrome: oklch(26.5% 0.004 255);
+  --sunken: oklch(24% 0.004 255);
+  --surface: oklch(21.5% 0.004 255);
+  --canvas: oklch(17.5% 0.004 255);
+  --sheet: oklch(24.5% 0.004 255);
+  --well: oklch(14% 0.004 255);
+  --raised: oklch(38% 0.005 255);
+  --line: oklch(32% 0.005 255);
+  --line-strong: oklch(44% 0.006 255);
+  --ink: oklch(94% 0.003 255);
+  --muted: oklch(72% 0.006 255);
+  --fill-hover: oklch(98% 0.003 255 / .07);
+  --fill-active: oklch(98% 0.003 255 / .12);
+  --accent: oklch(72% 0.14 252);
+  --accent-fill: oklch(55% 0.19 258);
+  --accent-hover: oklch(51% 0.19 258);
+  --accent-ink: oklch(99% 0.003 255);
+  --accent-soft: oklch(32% 0.06 255);
+  --accent-line: oklch(58% 0.12 255);
+  --ok: oklch(76% 0.14 150);
+  --flag: oklch(44% 0.09 95);
+  --flag-strong: oklch(80% 0.14 90);
+  --flag-ink: oklch(93% 0.06 95);
+  --warn: oklch(80% 0.13 70);
+  --danger: oklch(73% 0.15 25);
+  --danger-soft: oklch(30% 0.06 25);
+  --shadow-1: 0 0 0 .5px oklch(100% 0 0 / .06), 0 1px 2px oklch(5% 0 0 / .4);
+  --shadow-2: 0 0 0 .5px oklch(100% 0 0 / .08), 0 4px 12px oklch(5% 0 0 / .3), 0 18px 44px oklch(5% 0 0 / .5);
+  --shadow-page: 0 0 0 .5px oklch(100% 0 0 / .05), 0 10px 30px oklch(5% 0 0 / .45);
+  color-scheme: dark;
 }
 
 /* ---------------------------------------------------------------- base */
@@ -146,6 +145,7 @@ input[type=file] { min-height: 0; padding: .3rem; }
 .seg .btn { border: 0; box-shadow: none; background: transparent; color: var(--ink); border-radius: var(--r-ctl); }
 .seg .btn:not([aria-pressed="true"]):hover { background-image: linear-gradient(var(--fill-hover), var(--fill-hover)); }
 .seg .btn[aria-pressed="true"] { background: var(--raised); color: var(--ink); box-shadow: var(--shadow-1); }
+.theme-seg { align-self: start; }
 
 /* popovers built on <details>: closed on outside click / Esc by app.js */
 .pop-wrap { position: relative; }
