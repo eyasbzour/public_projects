@@ -226,10 +226,10 @@ def cut_row(words: list[Word], cuts: list[float]) -> list[list[Word]]:
     return parts
 
 
-def split_row(words: list[Word], min_gap: float) -> list[list[Word]]:
-    """Cut a row where there is a wide empty gap: [[right part words], [next part], ...]."""
-    gaps = row_gaps(words, min_gap)
-    return cut_row(words, [(lo + hi) / 2 for lo, hi in gaps]) if gaps else [words]
+def split_row(words: list[Word], min_gap: float) -> tuple[list[list[Word]], list[float]]:
+    """Cut a row where there is a wide empty gap: ([[right part words], [next part], ...], the cut positions)."""
+    cuts = [(lo + hi) / 2 for lo, hi in row_gaps(words, min_gap)]
+    return (cut_row(words, cuts), cuts) if cuts else ([words], [])
 
 
 def shared_gaps(a: list[tuple[float, float]], b: list[tuple[float, float]], min_w: float) -> list[tuple[float, float]]:
@@ -277,6 +277,16 @@ def lines_to_blocks(lines: list[Line], low_conf: float, tables: list = (), size:
       after the block above it, so a note in the margin never splits or glues paragraphs.
     """
     items: list[tuple[float, str, object]] = []  # (top, kind, payload), sorted into page order below
+    W, H = size or (0, 0)
+
+    def frac(x0, y0, x1, y1):
+        """A place on the page as fractions, so a cell can be shown and read again; none without the size."""
+        return [round(x0 / W, 4), round(y0 / H, 4), round(x1 / W, 4), round(y1 / H, 4)] if size else None
+
+    def part_boxes(ln: Line, cuts: list[float]) -> list:
+        """Each part of a row cut at x positions (right to left), on the line's height."""
+        edges = [max(ln.x1, cuts[0] + h if cuts else ln.x1)] + list(cuts) + [min(ln.x0, cuts[-1] - h if cuts else ln.x0)]
+        return [frac(edges[k + 1], ln.y0, edges[k], ln.y1) for k in range(len(cuts) + 1)]
     for grid in tables:
         cells = [[[] for _ in grid.xs[1:]] for _ in grid.ys[1:]]
         for ln in lines:
@@ -292,7 +302,9 @@ def lines_to_blocks(lines: list[Line], low_conf: float, tables: list = (), size:
                     ln.x1, ln.y1 = max(b[2] for b in boxes), max(b[3] for b in boxes)
         rows = [[words_to_segs(c, low_conf, size) for c in row] for row in cells]
         if any(seg for row in rows for cell in row for seg in cell):
-            items.append((grid.ys[0], "table", rows))
+            n = len(grid.xs) - 1  # column 0 is the rightmost (Grid.cell)
+            boxes = [[frac(grid.xs[n - 1 - c], grid.ys[r], grid.xs[n - c], grid.ys[r + 1]) for c in range(n)] for r in range(len(rows))]
+            items.append((grid.ys[0], "table", (rows, boxes)))
 
     lines = merge_rows([ln for ln in lines if ln.words])
     if not lines and not items and not marks:
@@ -306,32 +318,41 @@ def lines_to_blocks(lines: list[Line], low_conf: float, tables: list = (), size:
     table_cuts = lineless_tables(lines, h, right - left)
     for ln, cuts in zip(lines, table_cuts):
         if cuts:  # a row of a table printed without lines; rows of one table share the same cuts
-            items.append((ln.y0, "trow", (id(cuts), cut_row(ln.words, cuts))))
+            items.append((ln.y0, "trow", (id(cuts), cut_row(ln.words, cuts), part_boxes(ln, cuts))))
             continue
-        parts = split_row(ln.words, min_gap)
-        items.append((ln.y0, "row", parts) if len(parts) > 1 else (ln.y0, "line", ln))
+        parts, row_cuts = split_row(ln.words, min_gap)
+        items.append((ln.y0, "row", (parts, part_boxes(ln, row_cuts))) if len(parts) > 1 else (ln.y0, "line", ln))
     items.sort(key=lambda it: it[0])
 
-    def spot(para: list[Line]) -> dict:
-        """Where the block sits on the page (fractions), so it can be read again with another engine."""
+    def spot(para: list[Line], lens: list[int]) -> dict:
+        """Where the block sits on the page (fractions), so it can be read again with another engine; with more
+        than one line, each line too: [x0, y0, x1, y1, where its text starts in the block]. words_to_segs joins
+        the words with one space, so lens (each line's words plus a space each) add up to those offsets."""
         if not size:
             return {}
         W, H = size
-        return {"box": [round(min(ln.x0 for ln in para) / W, 4), round(min(ln.y0 for ln in para) / H, 4),
-                        round(max(ln.x1 for ln in para) / W, 4), round(max(ln.y1 for ln in para) / H, 4)]}
+        frac = lambda ln: [round(ln.x0 / W, 4), round(ln.y0 / H, 4), round(ln.x1 / W, 4), round(ln.y1 / H, 4)]
+        out = {"box": [round(min(ln.x0 for ln in para) / W, 4), round(min(ln.y0 for ln in para) / H, 4),
+                       round(max(ln.x1 for ln in para) / W, 4), round(max(ln.y1 for ln in para) / H, 4)]}
+        if len(para) > 1:
+            starts = [sum(lens[:k]) for k in range(len(para))]
+            out["lines"] = [frac(ln) + [at] for ln, at in zip(para, starts)]
+        return out
 
     def para_block(para: list[Line]) -> dict | None:
         words = [w for ln in para for w in ln.words]
+        lens = [sum(len(w.text) + 1 for w in ln.words) for ln in para]
         btype = "p"
         item = para[0].extra.get("list")  # lists.mark_list_items
         if item:
             segs = words_to_segs(words, low_conf, size)
             num = para[0].extra.get("num")
-            return {"type": item, "bold": False, "level": 0, "segs": segs, **({"start": num} if num and num > 1 else {}), **spot(para)} if segs else None
+            return {"type": item, "bold": False, "level": 0, "segs": segs, **({"start": num} if num and num > 1 else {}), **spot(para, lens)} if segs else None
         if words and (words[0].text in BULLETS or words[0].text[:1] in BULLETS):
             first = words[0]
             rest = first.text[1:].strip()
             words = ([Word(rest, first.conf, first.box)] if rest else []) + words[1:]
+            lens[0] -= len(first.text) - len(rest) + (0 if rest else 1)
             btype = "li"
         align = page_align(para, left, right)
         if btype == "p" and len(para) == 1:
@@ -343,7 +364,7 @@ def lines_to_blocks(lines: list[Line], low_conf: float, tables: list = (), size:
                 btype = "h"
         segs = words_to_segs(words, low_conf, size)
         bold = btype == "h" or all(ln.extra.get("bold") for ln in para)
-        return {"type": btype, "bold": bold, "segs": segs, **({"align": align} if align else {}), **spot(para)} if segs else None
+        return {"type": btype, "bold": bold, "segs": segs, **({"align": align} if align else {}), **spot(para, lens)} if segs else None
 
     blocks: list[dict] = []
     tops: list[float] = []  # where each block starts on the page, to put the marks back in order
@@ -375,21 +396,29 @@ def lines_to_blocks(lines: list[Line], low_conf: float, tables: list = (), size:
             para.append(x)
         else:
             flush()
+            # cellBoxes: each cell's place on the page, in the same shape as rows
+            boxed = lambda b, boxes: {**b, "cellBoxes": boxes} if size else b
             if kind == "table":
-                add({"type": "table", "bold": False, "rows": x}, top)
+                rows, boxes = x
+                add(boxed({"type": "table", "bold": False, "rows": rows}, boxes), top)
             elif kind == "trow":
-                run, parts = x
+                run, parts, boxes = x
                 row = [words_to_segs(p, low_conf, size) for p in parts]
                 if prev_kind == ("trow", run):
                     blocks[-1]["rows"].append(row)
+                    if size:
+                        blocks[-1]["cellBoxes"].append(boxes)
                 else:  # lineless: cells start-aligned like a ruled table's, only drawn without lines
-                    add({"type": "table", "bold": False, "borderless": True, "lineless": True, "rows": [row]}, top)
+                    add(boxed({"type": "table", "bold": False, "borderless": True, "lineless": True, "rows": [row]}, [boxes]), top)
             else:
-                row = [words_to_segs(p, low_conf, size) for p in x]
+                parts, boxes = x
+                row = [words_to_segs(p, low_conf, size) for p in parts]
                 if prev_kind == "row" and len(blocks[-1]["rows"][0]) == len(row):
                     blocks[-1]["rows"].append(row)
+                    if size:
+                        blocks[-1]["cellBoxes"].append(boxes)
                 else:
-                    add({"type": "table", "bold": False, "borderless": True, "rows": [row]}, top)
+                    add(boxed({"type": "table", "bold": False, "borderless": True, "rows": [row]}, [boxes]), top)
         prev_kind = ("trow", x[0]) if kind == "trow" else kind
     flush()
 

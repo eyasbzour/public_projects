@@ -1,4 +1,4 @@
-// Second readings: a flagged word, all flagged spots, a paragraph. node reread-check.js <draftId> [base]
+// Second readings: a flagged word, all flagged spots (a line or paragraph: line-check.js). node reread-check.js <draftId> [base]
 const { chromium } = require('playwright-core');
 const path = require('path');
 const ID = process.argv[2], BASE = process.argv[3] || 'http://localhost:8765';
@@ -36,20 +36,6 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
     check('using one puts its text in the page, flag kept', after.includes(want) && after.length === before.length, want);
   }
   await page.screenshot({ path: path.join(__dirname, 'shots', 'reread-flags.png') });
-  // a paragraph
-  await page.locator('#editor .ProseMirror > p').nth(1).click();
-  const btn = page.locator('#fmtBar button[aria-label="أعد قراءة الفقرة بقارئ آخر"]');
-  check('paragraph re-read is enabled in a read paragraph', await page.waitForFunction(() => !document.querySelector('#fmtBar button[aria-label="أعد قراءة الفقرة بقارئ آخر"]').disabled, null, { timeout: 3000 }).then(() => true, () => false));
-  await btn.click();
-  await page.selectOption('.reread-pop select', 'tess-best'); await page.click('.reread-pop .btn.primary');
-  await page.waitForSelector('.reread-pop .reread-text', { timeout: 60000 });
-  const got = await page.textContent('.reread-pop .reread-text');
-  await page.screenshot({ path: path.join(__dirname, 'shots', 'reread-para.png') });
-  await page.click('.reread-pop .reread-out .btn');
-  const now = await page.locator('#editor .ProseMirror > p').nth(1).textContent();
-  check('the paragraph takes the new reading', now.replace(/\s+/g, '') === got.replace(/\s+/g, ''), `${got.slice(0, 40)}`);
-  await page.locator('#editor .ProseMirror > p').nth(1).click(); await page.keyboard.press('Control+z');
-  check('and undo brings the old text back', (await page.locator('#editor .ProseMirror > p').nth(1).textContent()) !== now);
   check('no page errors', errors.length === 0, errors.join(' | '));
   await browser.close(); process.exit(fails ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e.message.split('\n')[0]); process.exit(2); });

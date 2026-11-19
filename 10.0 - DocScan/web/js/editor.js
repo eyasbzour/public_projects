@@ -2,8 +2,8 @@
  * The page text editor: Tiptap / ProseMirror (web/vendor/tiptap.min.js, built by tools/editor) plus the app's
  * own pieces: flagged words (<mark class="flag"> with the note and the spot on the photo), pictures cut from
  * the page, and tables that remember whether the page printed them with lines.
- *   DocEditor.mount(el, blocks, { src, onChange, onState }) -> page editor
- *   DocEditor.toolbar(bar, () => current page editor, { picture, flag })
+ *   DocEditor.mount(el, blocks, { src, onChange, onState, onPasteImage }) -> page editor
+ *   DocEditor.toolbar(bar, () => current page editor, { picture, flag, engines, hasPage, showLine, previewOn, togglePreview }, floatHost)
  * The page model (blocks) <-> editor document conversion lives in blocks-doc.js.
  */
 (function () {
@@ -79,17 +79,78 @@
   const BlockBox = T.Extension.create({
     name: 'blockBox',
     addGlobalAttributes() {
+      // the half after Enter is new text: it has no place on the photo
       return [{ types: ['paragraph', 'heading'], attributes: { box: {
         default: null,
+        keepOnSplit: false,
         parseHTML: (el) => (el.dataset.box ? el.dataset.box.split(',').map(Number) : null),
         renderHTML: (a) => (a.box ? { 'data-box': a.box.join(',') } : {}),
+      }, lines: {  // each line: [x0, y0, x1, y1, where its text starts in the paragraph]
+        default: null,
+        keepOnSplit: false,
+        parseHTML: (el) => { try { return el.dataset.lines ? JSON.parse(el.dataset.lines) : null; } catch (e) { return null; } },
+        renderHTML: (a) => (a.lines ? { 'data-lines': JSON.stringify(a.lines) } : {}),
       } } }, { types: ['paragraph', 'heading', 'bulletList', 'orderedList', 'table'], attributes: { dir: {
         default: null,
         parseHTML: (el) => (el.getAttribute('dir') === 'ltr' ? 'ltr' : null),
         renderHTML: (a) => (a.dir === 'ltr' ? { dir: 'ltr' } : {}),
       } } }];
     },
+    // where each line starts follows the text as it is edited, so the line read again is still that line
+    // (text typed right at a line's start belongs to that line)
+    addProseMirrorPlugins() {
+      return [new T.Plugin({
+        appendTransaction(trs, before, after) {
+          if (!trs.some((t) => t.docChanged)) return null;
+          const map = (pos) => trs.reduce((p, t) => t.mapping.map(p, -1), pos);
+          let tr = null;
+          // Enter in the middle of a paragraph copies its attributes to the second half (keepOnSplit only
+          // covers Enter at the end): the same place twice means a split, and only the first half keeps it
+          const seen = new Set();
+          after.doc.descendants((node, pos) => {
+            if (!node.isTextblock) return true;
+            const b = node.attrs.box;
+            if (b && seen.has(b)) {
+              tr = tr || after.tr;
+              tr.setNodeMarkup(pos, null, Object.assign({}, node.attrs, { box: null, lines: null }));
+            } else if (b) seen.add(b);
+            return false;
+          });
+          before.doc.descendants((node, pos) => {
+            if (!node.isTextblock) return true;
+            const ls = node.attrs.lines;
+            if (!ls) return false;
+            const $n = after.doc.resolve(Math.min(map(pos + 1), after.doc.content.size));
+            const p = $n.parent;
+            if (p.attrs.lines !== ls) return false;  // that paragraph is gone, or already updated
+            const start = $n.start(), size = p.content.size;
+            const moved = ls.map((l) => l.slice(0, 4).concat(Math.max(0, map(pos + 1 + l[4]) - start)));
+            // lines whose text went away (deleted, or moved into the next paragraph by Enter) leave, and the
+            // paragraph's place shrinks to the lines it still has
+            const kept = moved.filter((l, k) => k === 0 || l[4] < size);
+            if (kept.length < moved.length) {
+              tr = tr || after.tr;
+              const box = [Math.min(...kept.map((l) => l[0])), Math.min(...kept.map((l) => l[1])), Math.max(...kept.map((l) => l[2])), Math.max(...kept.map((l) => l[3]))];
+              tr.setNodeMarkup($n.before(), null, Object.assign({}, p.attrs, { box, lines: kept.length > 1 ? kept : null }));
+            } else if (moved.some((l, k) => l[4] !== ls[k][4])) {
+              tr = tr || after.tr;
+              tr.setNodeMarkup($n.before(), null, Object.assign({}, p.attrs, { lines: moved }));
+            }
+            return false;
+          });
+          return tr;
+        },
+      })];
+    },
   });
+
+  // an image on the clipboard (a screenshot, a copied picture); copying text from Word also puts a picture of
+  // it there, so text on the clipboard wins
+  function pastedImages(e) {
+    const d = e.clipboardData;
+    if (!d || (d.getData('text/plain') || '').trim()) return [];
+    return [...(d.files || [])].filter((f) => f.type.startsWith('image/'));
+  }
 
   function mount(el, blocks, opts) {
     const state = () => opts.onState && opts.onState();
@@ -104,7 +165,15 @@
         Flag, BlockBox,
       ],
       content: window.BlocksDoc.blocksToDoc(blocks),
-      editorProps: { attributes: { dir: 'rtl', class: 'doc', spellcheck: 'false', role: 'textbox', 'aria-multiline': 'true', 'aria-label': 'نص الصفحة' } },
+      editorProps: {
+        attributes: { dir: 'rtl', class: 'doc', spellcheck: 'false', role: 'textbox', 'aria-multiline': 'true', 'aria-label': 'نص الصفحة' },
+        handlePaste: (view, e) => {
+          const files = pastedImages(e);
+          if (!files.length || !opts.onPasteImage) return false;
+          opts.onPasteImage(files);
+          return true;
+        },
+      },
       onUpdate: () => opts.onChange && opts.onChange(),
       onTransaction: state,
       onFocus: state,
@@ -112,7 +181,28 @@
     });
 
     const figureSelected = () => editor.isActive('figure');
-    return {
+    // the document range of a flagged word's <mark>, or null once it is gone from the page
+    const flagRange = (markEl) => {
+      try {
+        const from = editor.view.posAtDOM(markEl, 0), to = editor.view.posAtDOM(markEl, markEl.childNodes.length);
+        return markEl.isConnected && from >= 0 && to >= from ? { from, to } : null;
+      } catch (e) { return null; }
+    };
+    // new text for from..to in tr, in the look of the text it replaces; no text deletes the word and one of the
+    // spaces around it, so "a word b" becomes "a b", not "a  b"
+    const fixFlag = (tr, from, to, text, o) => {
+      const doc = tr.doc, node = doc.nodeAt(from), old = node ? node.marks : [];
+      const flag = old.find((m) => m.type.name === 'flag');
+      const marks = old.filter((m) => m.type.name !== 'flag');
+      if (!o.unflag && flag) marks.push(doc.type.schema.marks.flag.create(Object.assign({}, flag.attrs, o.note != null ? { note: o.note } : {})));
+      if (text) { tr.replaceWith(from, to, doc.type.schema.text(text, marks)); return; }
+      const $a = doc.resolve(from), start = $a.start(), end = $a.end();
+      const before = from > start ? doc.textBetween(from - 1, from) : '', after = to < end ? doc.textBetween(to, to + 1) : '';
+      if (after === ' ' && (before === ' ' || from === start)) to++;
+      else if (before === ' ' && to === end) from--;
+      tr.delete(from, to);
+    };
+    const api = {
       editor,
       getBlocks: () => window.BlocksDoc.docToBlocks(editor.getJSON()),
       destroy: () => editor.destroy(),
@@ -173,30 +263,88 @@
 
       // fix a flagged word from its panel: new text, keep or drop the flag, optionally a new note
       replaceFlag(markEl, text, o) {
-        const view = editor.view, st = editor.state;
-        let from, to;
-        try { from = view.posAtDOM(markEl, 0); to = view.posAtDOM(markEl, markEl.childNodes.length); } catch (e) { return false; }
-        const node = st.doc.nodeAt(from);
-        const old = node ? node.marks : [];
-        const flag = old.find((m) => m.type.name === 'flag');
-        const marks = old.filter((m) => m.type.name !== 'flag');
-        if (!o.unflag && flag) marks.push(st.schema.marks.flag.create(Object.assign({}, flag.attrs, o.note != null ? { note: o.note } : {})));
-        const tr = text ? st.tr.replaceWith(from, to, st.schema.text(text, marks)) : st.tr.delete(from, to);
-        view.dispatch(tr);
+        const r = flagRange(markEl);
+        if (!r) return false;
+        const tr = editor.state.tr;
+        fixFlag(tr, r.from, r.to, text, o);
+        editor.view.dispatch(tr);
         return true;
+      },
+      // several flagged words at once ([{ el, text }], e.g. every suggestion): all places are found first and
+      // changed from the end in one step, so each lands in its own flag and one undo takes them all back
+      replaceFlags(items) {
+        const todo = items.map((it) => Object.assign({ text: it.text }, flagRange(it.el))).filter((r) => r.from != null).sort((a, b) => b.from - a.from);
+        if (!todo.length) return 0;
+        const tr = editor.state.tr;
+        todo.forEach((r) => fixFlag(tr, r.from, r.to, r.text, {}));
+        editor.view.dispatch(tr);
+        return todo.length;
       },
 
-      // the paragraph (or list item, heading) the cursor is in: its photo box, and swapping its text
-      paragraphBox() {
-        const p = editor.state.selection.$from.parent;
-        return p.isTextblock ? p.attrs.box || null : null;
+      // what the cursor is in, to show its spot on the photo and read it again: null outside text, else
+      // { box, para, line }. para and line are { box, from, to, text }; line is the photo line(s) under the
+      // cursor or the selection, when the reading recorded the paragraph's lines
+      // pos: a place clicked (posAt), in place of the selection, which a click updates only a moment later
+      readTarget(pos) {
+        const st = editor.state, sel = pos == null ? st.selection : null;
+        const $from = sel ? sel.$from : st.doc.resolve(pos), $to = sel ? sel.$to : $from, empty = sel ? sel.empty : true;
+        const p = $from.parent;
+        if (!p.isTextblock) return null;
+        const start = $from.start(), size = p.content.size;
+        const part = (box, a, b) => ({ box, from: start + a, to: start + b, text: st.doc.textBetween(start + a, start + b, ' ', ' ') });
+        const ls = p.attrs.box && p.attrs.lines;
+        const height = (pick) => pick.reduce((s, l) => s + l[3] - l[1], 0) / pick.length;  // one photo line's
+        let ltr = false;
+        for (let d = $from.depth; d > 0; d--) if ($from.node(d).attrs.dir === 'ltr') ltr = true;
+        const out = { box: p.attrs.box || null, at: $from.pos, ltr, line: null,
+          para: p.attrs.box ? Object.assign(part(p.attrs.box, 0, size), { lineH: ls ? height(ls) : p.attrs.box[3] - p.attrs.box[1] }) : null };
+        if (ls && ls.length > 1) {
+          const at = (k) => Math.min(size, ls[k][4]);
+          const a = $from.parentOffset, b = empty || !$to.sameParent($from) ? a : $to.parentOffset;
+          let first = 0, last;
+          while (first + 1 < ls.length && at(first + 1) <= a) first++;
+          for (last = first; last + 1 < ls.length && at(last + 1) < b; last++);
+          const end = last + 1 < ls.length ? Math.max(at(last), at(last + 1) - 1) : size;  // not the space before the next line
+          const pick = ls.slice(first, last + 1);
+          const box = [Math.min(...pick.map((l) => l[0])), Math.min(...pick.map((l) => l[1])), Math.max(...pick.map((l) => l[2])), Math.max(...pick.map((l) => l[3]))];
+          const line = part(box, at(first), end);
+          if (line.text.trim()) out.line = Object.assign(line, { count: pick.length, lineH: height(pick) });
+        }
+        // in a table the paragraph is a cell, and its whole row can be shown and read too (not replaced:
+        // one reading of a row does not say which words go in which cell)
+        for (let d = $from.depth - 1; d > 0; d--) {
+          const row = $from.node(d);
+          if (row.type.name !== 'tableRow') continue;
+          out.cell = true;
+          const boxes = [];
+          row.forEach((c) => { const f = c.firstChild; if (f && f.attrs.box) boxes.push(f.attrs.box); });
+          if (out.para && boxes.length > 1) {
+            const box = [Math.min(...boxes.map((b) => b[0])), Math.min(...boxes.map((b) => b[1])), Math.max(...boxes.map((b) => b[2])), Math.max(...boxes.map((b) => b[3]))];
+            out.row = { box, from: $from.start(d), to: $from.end(d), text: st.doc.textBetween($from.start(d), $from.end(d), ' | ', ' '), lineH: box[3] - box[1], readOnly: true };
+          }
+          break;
+        }
+        return out;
       },
-      replaceParagraph(segs) {
-        const st = editor.state, $f = st.selection.$from;
-        if (!$f.parent.isTextblock) return false;
-        const nodes = window.BlocksDoc.segsToInline(segs).map((j) => st.schema.nodeFromJSON(j));
-        editor.view.dispatch(st.tr.replaceWith($f.start(), $f.end(), nodes));
+      // replace from..to with a reading, only while it still holds the text that was read
+      replaceRange(from, to, expected, segs) {
+        const st = editor.state;
+        if (to > st.doc.content.size || st.doc.textBetween(from, to, ' ', ' ') !== expected) return false;
+        // the reading comes as plain text: it takes the look (bold, colour, size) of the text it replaces
+        const look = ((st.doc.nodeAt(from) || {}).marks || []).filter((m) => m.type.name !== 'flag');
+        const nodes = window.BlocksDoc.segsToInline(segs).map((j) => st.schema.nodeFromJSON(j))
+          .map((n) => (n.isText && look.length ? n.mark(look.reduce((set, m) => m.addToSet(set), n.marks)) : n));
+        editor.view.dispatch(st.tr.replaceWith(from, to, nodes));
         return true;
+      },
+      focus() { editor.view.focus(); },
+      posAt(x, y) { const r = editor.view.posAtCoords({ left: x, top: y }); return r ? r.pos : null; },
+      // screen rectangle of the text from..to (to place a panel next to it)
+      rectOf(from, to) {
+        const v = editor.view, a = v.coordsAtPos(from), b = v.coordsAtPos(to);
+        const dom = v.domAtPos(from).node, block = (dom.nodeType === 1 ? dom : dom.parentElement).closest('p, h1, h2, h3, li') || v.dom;
+        const r = block.getBoundingClientRect();
+        return { top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom), left: r.left, right: r.right };
       },
 
       toggleTableLines() {
@@ -204,6 +352,8 @@
         editor.chain().focus().updateAttributes('table', lined ? { borderless: true } : { borderless: false, lineless: false }).run();
       },
     };
+    el.docEditor = api;  // for the browser checks (tests/browser)
+    return api;
   }
 
   // ------------------------------------------------------------------ toolbar
@@ -404,32 +554,12 @@
       enabled: () => actions.hasPage() });
     button(ins, { icon: 'flag', text: 'تعليم', label: 'تعليم النص المحدد كملاحظة', run: () => actions.flag(), always: true, enabled: (pe) => !!pe });
 
-    // read the paragraph at the cursor again with another engine (actions.engines / actions.readSpot from the app)
+    // the line at the cursor: its spot on the photo, and reading it again with another engine (the app's panel)
     const again = group();
-    popover(button(again, { icon: 'scan', text: 'أعد القراءة', label: 'أعد قراءة الفقرة بقارئ آخر', run: () => {},
-      enabled: (pe) => !!pe.paragraphBox() }), (pop) => {
-      const pe = get();
-      const box = pe.paragraphBox();
-      const sel = document.createElement('select'); sel.setAttribute('aria-label', 'القارئ');
-      actions.engines().forEach(([id, label, on]) => { const o = document.createElement('option'); o.value = id; o.textContent = label; o.selected = on; sel.append(o); });
-      const go = document.createElement('button'); go.type = 'button'; go.className = 'btn small primary'; go.textContent = 'اقرأ الفقرة';
-      const out = document.createElement('div'); out.className = 'reread-out'; out.hidden = true;
-      go.addEventListener('click', async () => {
-        go.disabled = true; out.hidden = false; out.textContent = 'جارٍ القراءة…';
-        try {
-          const r = await actions.readSpot(sel.value, box);
-          const use = document.createElement('button'); use.type = 'button'; use.className = 'btn small'; use.textContent = 'استبدال نص الفقرة';
-          use.addEventListener('click', () => { if (pe.replaceParagraph(r.segs)) closePop(); });
-          const txt = document.createElement('p'); txt.className = 'reread-text'; txt.textContent = r.text || '(لم يُقرأ نص)';
-          out.replaceChildren(txt, use);
-          use.disabled = !r.text;
-        } catch (e) { out.textContent = e.message; }
-        go.disabled = false;
-      });
-      const head = document.createElement('div'); head.className = 'grid-label'; head.textContent = 'قراءة الفقرة من الصورة بقارئ آخر';
-      const row = document.createElement('div'); row.className = 'reread-row'; row.append(sel, go);
-      pop.classList.add('reread-pop'); pop.append(head, row, out);
-    });
+    button(again, { icon: 'scan', text: 'أعد القراءة', label: 'السطر في صورة الصفحة، وقراءته بقارئ آخر', run: () => actions.showLine() });
+    // a click into the text shows that line on the photo; this turns that off and on (remembered on this computer)
+    button(again, { icon: 'eye', label: 'معاينة السطر من الصورة عند النقر', always: true, on: () => actions.previewOn(),
+      run: () => { actions.togglePreview(); update(); } });
 
     const hist = group();
     button(hist, { icon: 'arrow-u-up-right', label: 'تراجع', keys: 'Ctrl+Z', run: (pe) => pe.chain().undo().run(), enabled: (pe) => can(pe, (c) => c.undo()) });

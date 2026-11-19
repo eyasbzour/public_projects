@@ -277,7 +277,15 @@ async def upload_image(draft_id: str, file: UploadFile = File(...)):
     if len(raw) > MAX_UPLOAD:
         _err(413, "الصورة كبيرة جداً (الحد 25 ميغابايت)")
     try:
-        img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw)))
+        if img.mode in ("RGBA", "LA", "PA") or (img.mode == "P" and "transparency" in img.info):
+            # a pasted screenshot or logo with see-through parts: on white paper, not black
+            img = img.convert("RGBA")
+            paper = Image.new("RGB", img.size, "white")
+            paper.paste(img, mask=img.getchannel("A"))
+            img = paper
+        else:
+            img = img.convert("RGB")
     except Exception:
         _err(400, "الملف ليس صورة صالحة")
     img.thumbnail((3200, 3200))

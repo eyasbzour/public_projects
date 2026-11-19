@@ -7,3 +7,5 @@ lo-profile/
 build/
 desktop/Arabic.isl
 tests/browser/node_modules/
+tests/browser/out/
+tests/browser/seed/

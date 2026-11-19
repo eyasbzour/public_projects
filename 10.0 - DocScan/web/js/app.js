@@ -390,7 +390,7 @@
   async function addFiles(files) {
     const items = [...files].filter((f) => f.type.startsWith('image/'))
       .map((f, k) => ({ f, file: f.name, fileTime: f.lastModified, k }));
-    if (!items.length) return;
+    if (!items.length) return 0;
     const cmp = ORDERERS[orderMode()];
     items.sort((a, b) => cmp(a, b) || a.k - b.k);
     syncEditor();
@@ -404,6 +404,7 @@
       } catch (e) { toast(`تعذر رفع ${it.file}: ${e.message}`, true); }
     }
     if (added) { markDirty(); if (draft.pages.length === added) showPage(0); }
+    return added;
   }
 
   async function resortPages() {
@@ -685,7 +686,7 @@
   let flagTimer = 0;
   function destroyEditor() {
     if (pe) { pe.destroy(); pe = null; }
-    closeNote();
+    closeNote(); closeLine();
   }
   function renderEditor() {
     const p = draft.pages[current];
@@ -699,11 +700,12 @@
       pe = window.DocEditor.mount(host, p.blocks, {
         src: (name) => `/api/drafts/${draft.id}/images/${name}`,
         onChange: () => {
-          markDirty();
+          markDirty(); closeLine();  // its line may have moved or changed
           clearTimeout(flagTimer);
           flagTimer = setTimeout(() => { syncEditor(); renderFlags(); renderPages(); }, 250);
         },
         onState: () => { if (toolbar) toolbar.update(); },
+        onPasteImage: pasteIntoText,
       });
     }
     renderFlags();
@@ -762,10 +764,10 @@
     syncEditor(); renderFlags(); renderPages(); markDirty();
   }
   function useAllSuggestions() {
-    for (const m of [...document.querySelectorAll('#editor mark.flag')].reverse()) {  // from the end: earlier positions stay put
-      const s = suggestions.get(String(markBox(m)));
-      if (s && s.text && s.text !== m.textContent) pe.replaceFlag(m, s.text, {});
-    }
+    if (!pe) return;
+    const items = [...document.querySelectorAll('#editor mark.flag')].map((m) => ({ el: m, s: suggestions.get(String(markBox(m))) }))
+      .filter((x) => x.s && x.s.text && x.s.text !== x.el.textContent).map((x) => ({ el: x.el, text: x.s.text }));
+    pe.replaceFlags(items);
     syncEditor(); renderFlags(); renderPages(); markDirty();
   }
   async function rereadFlags() {
@@ -848,31 +850,174 @@
     const note = $('noteText').classList.contains('hidden') ? null : ($('noteText').value.trim() || 'راجع هذا الموضع');
     pe.replaceFlag(noteMark, text, { unflag, note });
     closeNote(); syncEditor(); renderFlags(); renderPages(); markDirty();
+    pe.focus();  // back in the text, so Ctrl+Z undoes it
   }
 
-  // the flagged word's spot on the photo, when the reading recorded it (free engines) and the photo
-  // is still the one that was read
+  // a spot of the page photo (a flagged word, a line, a paragraph), when the reading recorded it (free
+  // engines) and the photo is still the one that was read. lineH: the height of one photo line there (a
+  // fraction of the page); with it the text is drawn big enough to read, and wider than the panel scrolls.
   let cropSrc = { key: '', canvas: null };
-  async function showCrop(mark) {
-    const cv = $('noteCrop'); cv.classList.add('hidden');
+  async function drawCrop(cv, box, still, lineH) {
+    cv.classList.add('hidden');
     const p = draft.pages[current];
-    const box = mark.dataset.box && mark.dataset.box.split(',').map(Number);
-    if (!box || !p || p.readImage !== p.image) return;
+    if (!box || !p || p.readImage !== p.image) return false;
     const key = p.image + '@' + (p.readRot || 0);
     if (cropSrc.key !== key) {
       const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = imgUrl(p); }).catch(() => null);
-      if (!img) return;
+      if (!img) return false;
       cropSrc = { key, canvas: window.ImageEditor._render(img, { rot90: p.readRot || 0, fine: 0, bright: 100, contrast: 100, gray: false }) };
     }
-    if (noteMark !== mark) return;  // another flag was opened meanwhile
+    if (!still()) return false;  // another spot was opened meanwhile
     const src = cropSrc.canvas, W = src.width, H = src.height;
-    const pad = Math.max(12, (box[3] - box[1]) * H * 0.6);
+    const pad = Math.max(12, Math.min(box[3] - box[1], lineH || 1) * H * 0.6);
     const sx = Math.max(0, box[0] * W - 2 * pad), sy = Math.max(0, box[1] * H - pad);
     const sw = Math.min(W, box[2] * W + 2 * pad) - sx, sh = Math.min(H, box[3] * H + pad) - sy;
-    cv.width = Math.round(Math.min(640, sw * 2)); cv.height = Math.round(cv.width * sh / sw);
+    if (lineH) {  // about 2.6rem per line, at the screen's own pixel density
+      const fit = cv.parentElement.clientWidth / sw, scale = Math.max(fit, Math.min(1.5, 42 / (lineH * H)));
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      cv.style.width = Math.round(sw * scale) + 'px'; cv.style.height = Math.round(sh * scale) + 'px';
+      cv.width = Math.min(4096, Math.round(sw * scale * dpr)); cv.height = Math.round(cv.width * sh / sw);
+    } else {
+      cv.width = Math.round(Math.min(640, sw * 2)); cv.height = Math.round(cv.width * sh / sw);
+    }
     cv.getContext('2d').drawImage(src, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
     cv.classList.remove('hidden');
-    placeNote();
+    return true;
+  }
+  async function showCrop(mark) {
+    if (await drawCrop($('noteCrop'), markBox(mark), () => noteMark === mark)) placeNote();
+  }
+
+  // ------------------------------------------------------------------ a line or paragraph of the text
+  // A click into the text opens a small panel under that line, like a flagged word's: its spot on the photo,
+  // and reading the line, or its whole paragraph, again with another reader. In a table: the cell, or its
+  // row (to compare only). Text with no place on the photo (read before this, read by an AI reader, or
+  // typed) shows nothing on a click; the toolbar button says why.
+  let lineAt = null;       // { t: pe.readTarget(), which: 'line' | 'para' | 'row', result }
+  let lineWhich = 'line';  // the last choice, while the app is open
+  // the click preview can be turned off from the toolbar (remembered on this computer)
+  const previewOn = () => store.get('linePreview') !== 'off';
+  function togglePreview() {
+    const on = !previewOn();
+    store.set('linePreview', on ? '' : 'off', true);
+    if (!on) closeLine();
+    toast(on ? 'تظهر صورة السطر عند النقر في النص.' : 'أُوقفت معاينة السطر عند النقر. زر "أعد القراءة" يعرضه متى شئت.');
+  }
+  function openLine(asked, pos) {
+    const t = pe && pe.readTarget(pos), p = draft && draft.pages[current];
+    const stale = !p || p.readImage !== p.image;
+    if (!t || (!asked && (!t.box || stale))) { closeLine(); return; }
+    closeNote();
+    const why = !t.box ? 'لا يُعرف موضع هذا النص في الصورة: قُرئت الصفحة قبل هذه الميزة، أو بقارئ ذكاء اصطناعي، أو كُتب النص يدوياً. أعد قراءة الصفحة بقارئ مجاني ليظهر موضعه.'
+      : stale ? 'تغيّرت صورة الصفحة بعد قراءتها. اقرأ الصفحة من جديد ليظهر موضع النص.' : '';
+    const can = ['line', 'para', 'row'].filter((k) => t[k]);
+    lineAt = { t, which: can.includes(lineWhich) ? lineWhich : t.line ? 'line' : 'para', result: null };
+    $('lineWhy').textContent = why;
+    $('lineWhy').classList.toggle('hidden', !why);
+    $('lineBody').classList.toggle('hidden', !!why);
+    $('lineWhich').classList.toggle('hidden', !!why || can.length < 2);
+    $('linePickLine').classList.toggle('hidden', !t.line);
+    $('linePickRow').classList.toggle('hidden', !t.row);
+    $('linePickPara').textContent = t.cell ? 'الخلية' : 'الفقرة';
+    $('linePop').classList.remove('hidden');
+    if (!why) {
+      const sel = $('lineEngine'), keep = sel.value;
+      fillEngineChoices(sel);
+      if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
+      showLineTarget();
+    }
+    placeLine();
+  }
+  function showLineTarget() {
+    const at = lineAt, tg = at.t[at.which];
+    $('linePickLine').textContent = at.t.line && at.t.line.count > 1 ? `الأسطر (${at.t.line.count})` : 'السطر';
+    for (const k of ['line', 'para', 'row']) $('linePick' + k[0].toUpperCase() + k.slice(1)).setAttribute('aria-pressed', String(at.which === k));
+    $('lineResult').classList.add('hidden');
+    at.result = null;
+    const wrap = $('lineCrop').parentElement;
+    wrap.dir = at.t.ltr ? 'ltr' : 'rtl';  // scrolled to where the line starts
+    wrap.classList.remove('hidden');      // its width sizes the picture
+    drawCrop($('lineCrop'), tg.box, () => lineAt === at && at.t[at.which] === tg, tg.lineH).then((ok) => {
+      wrap.classList.toggle('hidden', !ok);
+      wrap.scrollLeft = 0; wrap.scrollTop = 0;
+      placeLine();
+    });
+  }
+  function pickLine(which) {
+    if (!lineAt || !lineAt.t[which]) return;
+    lineWhich = lineAt.which = which;
+    showLineTarget();
+  }
+  function placeLine() {
+    if (!lineAt || !pe) return;
+    const t = lineAt.t, near = t.line || t.para;  // next to the line that was clicked, also for its paragraph
+    const r = near ? pe.rectOf(near.from, near.to) : pe.rectOf(t.at, t.at);
+    const pop = $('linePop'), w = pop.offsetWidth, h = pop.offsetHeight;
+    const below = r.bottom + 8, fits = below + h < window.innerHeight - 10;
+    pop.style.top = Math.max(10, fits ? below : r.top - h - 8) + 'px';
+    pop.style.left = Math.max(10, Math.min(window.innerWidth - w - 10, r.right - w)) + 'px';
+  }
+  async function rereadLine() {
+    const at = lineAt; if (!at) return;
+    const tg = at.t[at.which], engine = $('lineEngine').value, btn = $('lineReadBtn');
+    btn.disabled = true; $('lineUse').disabled = true;
+    $('lineText').textContent = `جارٍ القراءة بـ ${engineLabel(engine)}…`;
+    $('lineResult').classList.remove('hidden'); placeLine();
+    try {
+      const [r] = await readSpots(engine, [tg.box]);
+      if (lineAt !== at || at.t[at.which] !== tg) return;  // closed, or switched to the other one meanwhile
+      at.result = { tg, segs: r.segs || [], text: (r.text || '').trim() };
+      const same = at.result.text === tg.text.trim();
+      $('lineText').textContent = at.result.text ? `${engineLabel(engine)}: «${at.result.text}»${same ? ' (مطابق للنص الحالي)' : ''}` : `لم يقرأ ${engineLabel(engine)} نصاً هنا.`;
+      if (tg.readOnly && at.result.text) $('lineText').textContent += ' قراءة الصف للمقارنة فقط؛ اقرأ الخلية نفسها لتستبدلها.';
+      $('lineUse').textContent = at.which === 'para' ? (at.t.cell ? 'استبدال الخلية' : 'استبدال الفقرة') : tg.count > 1 ? 'استبدال الأسطر' : 'استبدال السطر';
+      $('lineUse').classList.toggle('hidden', !!tg.readOnly);
+      $('lineUse').disabled = !at.result.text || same;
+    } catch (e) {
+      if (lineAt === at) $('lineResult').classList.add('hidden');
+      toast(e.message, true);
+    } finally {
+      btn.disabled = false;
+      placeLine();
+    }
+  }
+  function useLine() {
+    const r = lineAt && lineAt.result;
+    if (!r || !pe) return;
+    if (!pe.replaceRange(r.tg.from, r.tg.to, r.tg.text, r.segs)) { toast('تغيّر النص منذ القراءة. اقرأه من جديد.', true); return; }
+    closeLine(); syncEditor(); renderFlags(); renderPages(); markDirty();
+    pe.focus();
+  }
+  function closeLine() {
+    lineAt = null;
+    $('linePop').classList.add('hidden');
+  }
+
+  // a picture on the clipboard pasted into the text goes in as a picture of the document, after the line
+  // the cursor is in; pasted anywhere else in a draft, it is a new page
+  async function pasteIntoText(files) {
+    for (const f of files) {
+      const fd = new FormData(); fd.append('file', f, f.name || 'pasted.png');
+      try {
+        const r = await api(`/api/drafts/${draft.id}/images`, { method: 'POST', body: fd });
+        if (!pe) return;
+        // a screenshot about 1000 px wide fills the page width; a small one stays small
+        pe.insertBlock({ type: 'figure', attrs: { image: r.name, w: r.width, h: r.height, wFrac: +Math.max(0.1, Math.min(1, r.width / 1000)).toFixed(3), align: null } });
+      } catch (e) { toast(`تعذر لصق الصورة: ${e.message}`, true); return; }
+    }
+    toast(files.length > 1 ? 'أُلصقت الصور في النص.' : 'أُلصقت الصورة في النص. اضغطها لتغيير محاذاتها أو حذفها.');
+  }
+  function pastePages(e) {
+    if (!draft || !document.body.classList.contains('in-draft')) return;
+    if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"], dialog')) return;
+    const d = e.clipboardData;
+    if (!d || (d.getData('text/plain') || '').trim()) return;
+    const stamp = new Date().toTimeString().slice(0, 8).replace(/:/g, '');
+    const files = [...(d.files || [])].filter((f) => f.type.startsWith('image/'))
+      .map((f, k) => new File([f], `ملصقة-${stamp}${k ? '-' + (k + 1) : ''}.${(f.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`, { type: f.type, lastModified: Date.now() }));
+    if (!files.length) return;
+    e.preventDefault();
+    addFiles(files).then((n) => { if (n) toast(n > 1 ? `أُضيفت ${n} صفحات من الحافظة.` : 'أُضيفت الصورة صفحةً جديدة.'); });
   }
 
   // pick an area of the page photo (logo, chart, signature) and put it after the block the cursor is in
@@ -1067,8 +1212,11 @@
     $('btnReadAll').onclick = () => readAllUnread();
     toolbar = window.DocEditor.toolbar($('fmtBar'), () => pe, {
       picture: insertPicture, flag: flagSelection, engines: engineChoices, hasPage: () => !!(draft && draft.pages[current]),
-      readSpot: async (engine, box) => (await readSpots(engine, [box]))[0],
+      showLine: () => openLine(true), previewOn, togglePreview,
     }, $('editorScroll'));
+    $('linePickLine').onclick = () => pickLine('line'); $('linePickPara').onclick = () => pickLine('para'); $('linePickRow').onclick = () => pickLine('row');
+    $('lineReadBtn').onclick = rereadLine; $('lineUse').onclick = useLine; $('lineClose').onclick = closeLine;
+    document.addEventListener('paste', pastePages);
     $('noteReadBtn').onclick = rereadNote;
     $('noteSuggest').onclick = () => { $('noteWord').value = $('noteSuggest').dataset.text; $('noteWord').focus(); };
     $('flagReread').onclick = rereadFlags;
@@ -1077,13 +1225,21 @@
     const ed = $('editor');
     // a flagged word is fixed in its panel: a click on it opens the panel and leaves the caret where it was
     ed.addEventListener('mousedown', (e) => { if (e.target.closest('mark.flag')) e.preventDefault(); });
-    ed.addEventListener('click', (e) => { const m = e.target.closest('mark.flag'); if (m) openNote(m); });
+    // any other click into the text (a caret, not a selection) shows that line on the photo
+    ed.addEventListener('click', (e) => {
+      const m = e.target.closest('mark.flag');
+      if (m) openNote(m);
+      else if (pe && previewOn() && document.getSelection().isCollapsed && !e.target.closest('figure')) {
+        const pos = pe.posAt(e.clientX, e.clientY);
+        if (pos != null) openLine(false, pos);
+      }
+    });
     $('noteSave').onclick = () => saveNote(false); $('noteRemove').onclick = () => saveNote(true); $('noteClose').onclick = closeNote;
     $('noteWord').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveNote(false); } });
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && draft) { e.preventDefault(); saveDraft(); }
       if (e.key === 'Escape') {
-        closeNote(); closeColFilter(true);
+        closeNote(); closeLine(); closeColFilter(true);
         document.querySelectorAll('details.pop-wrap[open]').forEach((d) => { d.open = false; d.querySelector('summary').focus(); });
       }
     });
@@ -1107,6 +1263,7 @@
       pops.forEach((d) => { if (d.open && !d.contains(e.target)) d.open = false; });
       if (colFilterFor && !e.target.closest('#colFilter, .filt')) closeColFilter(false);
       if (noteMark && !e.target.closest('#notePop, mark.flag, .flag-item')) closeNote();
+      if (lineAt && !e.target.closest('#linePop')) closeLine();
     });
 
     $('btnPick').onclick = () => $('fileAdd').click();
@@ -1121,12 +1278,17 @@
     });
     document.querySelectorAll('.pane-tabs [role=tab]').forEach((t) => { t.onclick = () => setPane(t.dataset.pane); });
     // the word panel follows its word while the text scrolls, and closes once the word is out of view
+    // (and the line panel its line)
     $('editorScroll').addEventListener('scroll', () => {
-      if (!noteMark) return;
-      const r = noteMark.getBoundingClientRect(), box = $('editorScroll').getBoundingClientRect();
-      if (r.bottom < box.top || r.top > box.bottom) closeNote(); else placeNote();
+      const box = $('editorScroll').getBoundingClientRect();
+      const gone = (r) => r.bottom < box.top || r.top > box.bottom;
+      if (noteMark) { if (gone(noteMark.getBoundingClientRect())) closeNote(); else placeNote(); }
+      if (lineAt && pe) {
+        const near = lineAt.t.line || lineAt.t.para;
+        if (gone(near ? pe.rectOf(near.from, near.to) : pe.rectOf(lineAt.t.at, lineAt.t.at))) closeLine(); else placeLine();
+      }
     }, { passive: true });
-    window.addEventListener('resize', placeNote);
+    window.addEventListener('resize', () => { placeNote(); placeLine(); });
     initSplitters();
     initCollapse();
     initPhotoPan();

@@ -28,8 +28,9 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
   check('panel sits under its column', under);
   check('desktop panel shows one field', (await page.$$eval('#colFilter .field', (f) => f.filter((x) => x.offsetParent).length)) === 1);
   await page.keyboard.type('انظمه');  // no hamza, ه for ة
-  check('spelling variants match', (await names()).join() === 'كتاب تحديث أنظمة الأرشفة', JSON.stringify(await names()));
-  check('count shows matches of all', (await page.textContent('#draftCount')) === `1 من ${total}`);
+  const hits = await names();  // the seed makes this letter once each run: every match is it
+  check('spelling variants match', hits.length > 0 && hits.every((n) => n === 'كتاب تحديث أنظمة الأرشفة'), JSON.stringify(hits.slice(0, 3)));
+  check('count shows matches of all', (await page.textContent('#draftCount')) === `${hits.length} من ${total}`);
   check('tag shows the filter', (await page.textContent('#draftFilters .chip')).includes('الوثيقة: انظمه'));
   check('funnel marked active', await page.$eval('th[data-k=name] .filt', (b) => b.classList.contains('on')));
   await page.keyboard.press('Escape');

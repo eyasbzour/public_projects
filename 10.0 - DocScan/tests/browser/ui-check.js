@@ -1,9 +1,7 @@
-// Interaction checks for the redesigned workspace. node ui-check.js [base]
+// Interaction checks for the redesigned workspace. node ui-check.js <draftId> [base]
 const { chromium } = require('playwright-core');
-const fs = require('fs');
 const path = require('path');
-const BASE = process.argv[2] || 'http://localhost:8765';
-const id = fs.readFileSync(path.join(__dirname, 'shot-draft.txt'), 'utf8').trim();
+const id = process.argv[2], BASE = process.argv[3] || 'http://localhost:8765';
 const OUT = path.join(__dirname, 'shots');
 let fails = 0;
 const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name} ${extra}`); if (!ok) fails++; };
@@ -83,8 +81,19 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
   check('Esc closes', !(await page.$eval('#outPop', (d) => d.open)));
 
   // formatting toolbar + alignment
-  const para = page.locator('#editor .ProseMirror > p').nth(2);
-  await para.click(); await page.waitForTimeout(250);
+  // a paragraph with plain text, clicked on that text (a flagged word opens its own panel instead)
+  const pick = await page.$$eval('#editor .ProseMirror > p', (ps) => {
+    for (let i = 1; i < ps.length; i++) {
+      const w = document.createTreeWalker(ps[i], NodeFilter.SHOW_TEXT); let t;
+      while ((t = w.nextNode())) if (!t.parentElement.closest('mark') && t.nodeValue.trim().length > 4) {
+        const r = document.createRange(); r.setStart(t, 1); r.setEnd(t, 2); const b = r.getBoundingClientRect();
+        return { i, x: b.x + b.width / 2, y: b.y + b.height / 2 };
+      }
+    }
+    return { i: 2, x: 0, y: 0 };
+  });
+  const para = page.locator('#editor .ProseMirror > p').nth(pick.i);
+  await page.mouse.click(pick.x, pick.y); await page.waitForTimeout(250);
   check('formatting toolbar is there', (await page.$$eval('#fmtBar .tb', (n) => n.length)) > 15);
   await page.screenshot({ path: path.join(OUT, 'check-toolbar.png') });
   await page.click('#fmtBar button[aria-label="محاذاة لليسار"]');

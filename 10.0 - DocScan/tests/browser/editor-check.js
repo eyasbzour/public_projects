@@ -25,9 +25,18 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
     const b = r.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
   }, at);
 
+  // a click on plain text of an element, never on a flagged word (that opens its panel and keeps the caret where it was)
+  const clickText = async (loc) => { const pt = await charPoint(loc, 1); await page.mouse.click(pt.x, pt.y); };
+
   // select the 2nd and 3rd plain paragraphs with the keyboard, then make them a bullet list
-  const a = await charPoint(paras.nth(1), 1), b = await charPoint(paras.nth(2), 3);
-  const want = await paras.evaluateAll((ns) => [ns[1].textContent.slice(0, 12), ns[2].textContent.slice(0, 12)]);
+  // two paragraphs in a row with plain text, after the first (a handwriting or stamp marker has none)
+  const [i1, i2] = await paras.evaluateAll((ns) => {
+    const plain = (n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode())) if (!t.parentElement.closest('mark') && t.nodeValue.trim().length > 6) return true; return false; };
+    for (let i = 1; i + 1 < ns.length; i++) if (plain(ns[i]) && plain(ns[i + 1])) return [i, i + 1];
+    return [1, 2];
+  });
+  const a = await charPoint(paras.nth(i1), 1), b = await charPoint(paras.nth(i2), 3);
+  const want = await paras.evaluateAll((ns, [i1, i2]) => [ns[i1].textContent.slice(0, 12), ns[i2].textContent.slice(0, 12)], [i1, i2]);
   await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move(b.x, b.y, { steps: 8 }); await page.mouse.up();
   await tb('قائمة نقطية').click();
   const items = await page.$$eval('#editor .ProseMirror > ul > li', (n) => n.length);
@@ -48,7 +57,7 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
 
   // bold, strike, italic, underline on a selection
   const p = paras.nth(0);
-  await p.click(); await page.keyboard.press('Home'); await page.keyboard.press('Shift+End');
+  await clickText(p); await page.keyboard.press('Home'); await page.keyboard.press('Shift+End');
   await tb('عريض').click(); await tb('يتوسطه خط').click();
   await page.keyboard.press('Control+i'); await page.keyboard.press('Control+u');
   const fmt = await p.evaluate((n) => ['strong', 's', 'em', 'u'].filter((t) => n.querySelector(t)));
@@ -72,6 +81,7 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
   check('line type: back to a paragraph', (await page.$$eval('#editor .ProseMirror > blockquote', (n) => n.length)) === 0);
 
   // tables: the context tools appear in a table and change it
+  await page.keyboard.press('End'); await page.waitForTimeout(150);  // drop the selection: its floating bar may sit over the table
   await page.locator('#editor .ProseMirror table td').first().click();
   check('table tools appear inside a table (mouse click into a cell)', await shown('إضافة صف'));
   check('table tools float above the table', await page.evaluate(() => {
@@ -85,7 +95,7 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
   check('- row removes it', (await page.$$eval('#editor .ProseMirror table tr', (n) => n.length)) === rows0);
   const cols = await page.$$eval('#editor .ProseMirror table tr:first-child td', (n) => n.length);
   check('- column disabled only when one column is left', (await fl('حذف العمود').isDisabled()) === (cols < 2));
-  await paras.nth(0).click();
+  await clickText(paras.nth(0));
   check('table tools hide outside the table', await hidden('إضافة صف'));
 
   // flags: the word panel still fixes just the word
@@ -104,7 +114,7 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
     && (await page.$$eval('#editor mark.flag', (n) => n.some((m) => m.dataset.note === 'ملاحظة جديدة'))));
 
   // pictures: inserted after the line, selected by a click, deleted
-  await paras.nth(0).click();
+  await clickText(paras.nth(0));
   await page.locator('#fmtBar button[aria-label^="إدراج جزء"]').click();
   await page.waitForSelector('#ieCropBox:not(.hidden)'); await page.click('#ieSave');
   await page.waitForSelector('#editor figure.fig img');
@@ -125,7 +135,7 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
 
   // colours, size, table size picker, cell fill
   const p0 = paras.nth(0);
-  await p0.click(); await page.keyboard.press('Home'); await page.keyboard.press('Shift+End'); await page.waitForTimeout(150);
+  await clickText(p0); await page.keyboard.press('Home'); await page.keyboard.press('Shift+End'); await page.waitForTimeout(150);
   await tb('لون النص').click(); await page.click('.tb-pop button[aria-label="أحمر"]');
   check('text colour from the palette', await p0.evaluate((n) => [...n.querySelectorAll('span[style]')].some((s) => s.style.color === 'rgb(255, 0, 0)')));
   await tb('لون خلفية النص').click(); await page.click('.tb-pop button[aria-label="أصفر باهت"]');
@@ -133,7 +143,7 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
   await page.fill('#fmtBar .tb-size', '18'); await page.press('#fmtBar .tb-size', 'Enter');
   check('typed text size', await p0.evaluate((n) => [...n.querySelectorAll('span[style]')].some((s) => s.style.fontSize === '18pt')));
   const tables0 = await page.$$eval('#editor .ProseMirror table', (n) => n.length);
-  await p0.click();
+  await clickText(p0);
   await tb('إدراج جدول').click();
   await page.hover('.tbl-grid button[data-r="3"][data-c="4"]');
   check('size picker shows rows x columns', (await page.textContent('.grid-label')) === '3 صفوف × 4 أعمدة');

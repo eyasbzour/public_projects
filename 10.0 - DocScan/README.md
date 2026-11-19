@@ -10,7 +10,8 @@ It runs two ways: as a Windows program (an installer, no browser or server neede
 ## What it does
 
 - **Drafts** are saved as you work. The home list can be searched by document name, person or page count, and sorted by any column.
-- **Pages** go in many at a time. Order them by name (1, 2, 10), alphabetically, by photo date or as picked, and drag to reorder.
+- **Pages** go in many at a time, or one at a time by pasting a copied picture (Ctrl+V). A picture pasted into the text goes
+  into the document instead. Order pages by name (1, 2, 10), alphabetically, by photo date or as picked, and drag to reorder.
   Each photo can be rotated, straightened, cropped, brightened or turned gray, and the original stays so it can be restored.
 - **Readers** are picked per page, and every new reading is kept as a version you can go back to or delete.
   The free ones run on the computer: PaddleOCR (the default), Nuqta (the most accurate for Arabic, but slower), Tesseract
@@ -23,8 +24,10 @@ It runs two ways: as a Windows program (an installer, no browser or server neede
 - Handwriting, signatures and stamps are not guessed into the text. Each one becomes a highlighted marker in its place,
   linked to its spot on the photo. PaddleOCR drops digits inside Arabic lines, so Tesseract reads the page too, and any number
   PaddleOCR missed is put back and highlighted.
-- Any highlighted word, any paragraph, or every highlighted spot on a page can be **read again** with another reader. Its
-  reading shows as a suggestion you can take with one click.
+- Clicking a line of the text shows that line on the photo, the way a highlighted word does. The small panel can switch to
+  the whole paragraph, or in a table to the cell or its row. The eye button in the toolbar turns this off and on.
+- Any highlighted word, any line, paragraph or table cell, or every highlighted spot on a page can be **read again** with
+  another reader. Its reading shows as a suggestion, and taking it replaces just that text and keeps its formatting.
 - The **editor** works like a page in Word: bold, italic, underline, strikethrough, text and highlight colors, any text size,
   three heading levels, quotes, alignment, left-to-right paragraphs, and undo. Select any lines to make them a bulleted or
   numbered list, then indent them. Tables take their size from a grid or from typed numbers, and their rows, columns, lines and

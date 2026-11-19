@@ -11,6 +11,8 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
   const errors = []; page.on('pageerror', (e) => errors.push(e.message));
   const d = await (await page.request.post(BASE + '/api/drafts', { data: { name: 'ask check' } })).json();
   await page.goto(`${BASE}/#/d/${d.id}`); await page.waitForSelector('#fmtBar .tb');
+  // the test photos e2e.js makes (run it first)
+  if (!require('fs').existsSync(path.join(__dirname, 'out/letter.jpg'))) throw new Error('out/letter.jpg is missing: run e2e.js first');
   await page.setInputFiles('#fileAdd', [path.join(__dirname, 'out/letter.jpg'), path.join(__dirname, 'out/letter (1).jpg')]);
   await page.waitForFunction(() => document.querySelectorAll('.page-item').length === 2);
   const del = () => page.locator('.page-item').first().locator('button[aria-label="حذف الصفحة"]').click({ force: true });

@@ -10,7 +10,8 @@
  *   h: heading, level 1-3 (2 when missing); q: quoted paragraph; c: centred bold line (older readings)
  *   li / ol: bullet / numbered list item, level 0.. (nesting); start: number of the first item; restart: a new
  *   numbered list right after another one.  table: rows of cells (each cell is segs), cellBg: the cells' fill
- *   colours in the same shape (only when some cell has one).  img: a picture.
+ *   colours in the same shape (only when some cell has one); cellBoxes: each cell's spot on the photo, the same way.
+ *   img: a picture.
  * The editor's document is Tiptap / ProseMirror JSON (paragraph, heading, bulletList, orderedList, table, figure).
  * Works in the browser (window.BlocksDoc) and in Node (require) for testing.
  */
@@ -65,6 +66,7 @@
   function textNode(type, b, segs, bold, extra) {
     var n = { type: type, attrs: Object.assign({ textAlign: (b.dir === 'ltr' ? TO_EDITOR_LTR : TO_EDITOR)[b.align] || null }, extra || {}) };
     if (b.box) n.attrs.box = b.box;  // where it sits on the photo, to read it again with another engine
+    if (b.lines) n.attrs.lines = b.lines;  // and each of its lines: [x0, y0, x1, y1, where its text starts]
     if (b.dir === 'ltr') n.attrs.dir = 'ltr';
     var content = inline(segs, bold);
     if (content.length) n.content = content;
@@ -108,7 +110,8 @@
           var cells = [];
           for (var c = 0; c < cols; c++) {
             var fill = b.cellBg && b.cellBg[ri] && b.cellBg[ri][c];
-            cells.push({ type: 'tableCell', attrs: { backgroundColor: fill || null }, content: [textNode('paragraph', { dir: b.dir }, r[c] || [], b.bold)] });
+            var place = b.cellBoxes && b.cellBoxes[ri] && b.cellBoxes[ri][c];  // the cell's spot on the photo, on its paragraph
+            cells.push({ type: 'tableCell', attrs: { backgroundColor: fill || null }, content: [textNode('paragraph', { dir: b.dir, box: place || null }, r[c] || [], b.bold)] });
           }
           return { type: 'tableRow', content: cells };
         }) });
@@ -172,6 +175,7 @@
     var a = node && node.attrs && (ltr ? FROM_EDITOR_LTR : FROM_EDITOR)[node.attrs.textAlign];
     if (a) b.align = a;
     if (node && node.attrs && node.attrs.box) b.box = node.attrs.box;
+    if (node && node.attrs && node.attrs.lines) b.lines = node.attrs.lines;
     if (ltr) b.dir = 'ltr';
     return b;
   }
@@ -212,19 +216,21 @@
         if (a.align) img.align = a.align;
         out.push(img);
       } else if (n.type === 'table') {
-        var fills = [], anyFill = false;
+        var fills = [], anyFill = false, places = [], anyPlace = false;
         var t = { type: 'table', rows: (n.content || []).map(function (row) {
-          var cells = [], rowFill = [];
+          var cells = [], rowFill = [], rowPlace = [];
           (row.content || []).forEach(function (cell) {
             var fill = hex(cell.attrs && cell.attrs.backgroundColor);
-            anyFill = anyFill || !!fill;
-            cells.push(linesOf(cell.content)); rowFill.push(fill);
-            for (var k = 1; k < ((cell.attrs && cell.attrs.colspan) || 1); k++) { cells.push([]); rowFill.push(fill); }  // keep the grid square
+            var first = (cell.content || [])[0], place = (first && first.attrs && first.attrs.box) || null;
+            anyFill = anyFill || !!fill; anyPlace = anyPlace || !!place;
+            cells.push(linesOf(cell.content)); rowFill.push(fill); rowPlace.push(place);
+            for (var k = 1; k < ((cell.attrs && cell.attrs.colspan) || 1); k++) { cells.push([]); rowFill.push(fill); rowPlace.push(null); }  // keep the grid square
           });
-          fills.push(rowFill);
+          fills.push(rowFill); places.push(rowPlace);
           return cells;
         }) };
         if (anyFill) t.cellBg = fills;
+        if (anyPlace) t.cellBoxes = places;
         if (n.attrs && n.attrs.borderless) t.borderless = true;
         if (n.attrs && n.attrs.dir === 'ltr') t.dir = 'ltr';
         if (n.attrs && n.attrs.lineless) t.lineless = true;

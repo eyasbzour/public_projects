@@ -190,7 +190,7 @@
         <div class="photo-empty hidden" id="photoEmpty">
           <svg class="i big" aria-hidden="true"><use href="vendor/icons.svg#images"/></svg>
           <b>أضف صور صفحات الوثيقة</b>
-          <p>اسحب الصور إلى هنا، أو اخترها من الجهاز. يمكنك ترتيبها بعد ذلك.</p>
+          <p>اسحب الصور إلى هنا، أو اخترها من الجهاز، أو الصق صورة نسختها (Ctrl+V). يمكنك ترتيبها بعد ذلك.</p>
           <button class="btn primary" id="btnPickBig" type="button">
             <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#images"/></svg><span>اختر الصور</span>
           </button>
@@ -409,6 +409,36 @@
     <button class="btn ghost small" id="noteRemove" type="button" title="يبقى النص كما صححته وتزول الإشارة والملاحظة">
       <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#check-circle"/></svg><span>حفظ وإزالة التعليم</span>
     </button>
+  </div>
+</div>
+
+<!-- a line or paragraph of the text: its spot on the photo, and reading it again with another reader -->
+<div id="linePop" class="note-pop line-pop hidden" role="dialog" aria-label="النص في صورة الصفحة">
+  <div class="note-status">
+    <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#scan"/></svg>
+    <span class="note-line">في صورة الصفحة</span>
+    <span class="line-which" id="lineWhich" role="group" aria-label="ما يُعرض ويُقرأ">
+      <button class="btn ghost small" id="linePickLine" type="button" aria-pressed="true">السطر</button>
+      <button class="btn ghost small" id="linePickPara" type="button" aria-pressed="false">الفقرة</button>
+      <button class="btn ghost small" id="linePickRow" type="button" aria-pressed="false">الصف</button>
+    </span>
+    <button class="btn ghost small icon-only" id="lineClose" type="button" aria-label="إغلاق">
+      <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
+    </button>
+  </div>
+  <p class="line-why hidden" id="lineWhy"></p>
+  <div class="line-body" id="lineBody">
+    <div class="line-crop"><canvas id="lineCrop" class="hidden" role="img" aria-label="الموضع في صورة الصفحة"></canvas></div>
+    <div class="note-reread">
+      <select id="lineEngine" aria-label="القارئ"></select>
+      <button class="btn ghost small" id="lineReadBtn" type="button">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#scan"/></svg><span>اقرأه بقارئ آخر</span>
+      </button>
+    </div>
+    <div class="line-result hidden" id="lineResult">
+      <p class="reread-text" id="lineText"></p>
+      <button class="btn primary small" id="lineUse" type="button">استبدال السطر</button>
+    </div>
   </div>
 </div>
 

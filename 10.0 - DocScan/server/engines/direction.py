@@ -63,7 +63,11 @@ def unmirror_blocks(blocks: list[dict]) -> list[dict]:
         b["dir"] = "ltr"
         if b.get("box"):
             b["box"] = fix(b["box"])
+        if b.get("lines"):
+            b["lines"] = [fix(ln[:4]) + ln[4:] for ln in b["lines"]]
         segs(b.get("segs"))
+        for row in b.get("cellBoxes") or []:
+            row[:] = [fix(c) if c else c for c in row]
         for row in b.get("rows") or []:
             for cell in row:
                 segs(cell)

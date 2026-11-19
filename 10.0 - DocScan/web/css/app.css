@@ -137,10 +137,6 @@ input[type=file] { min-height: 0; padding: .3rem; }
 }
 @keyframes pop-in { from { opacity: 0; transform: translateY(-4px); } }
 /* reading spots again with another engine */
-.reread-pop { width: 21rem; }
-.reread-row { display: flex; gap: .4rem; }
-.reread-row select { flex: 1; min-width: 0; }
-.reread-out { display: grid; gap: .45rem; font-size: var(--fs-sm); color: var(--muted); }
 .reread-text { margin: 0; padding: .5rem .6rem; color: var(--ink); background: var(--canvas); border: 1px solid var(--line); border-radius: var(--r-ctl); line-height: 1.8; max-height: 9rem; overflow: auto; }
 .note-reread { display: flex; gap: .4rem; align-items: center; }
 .note-reread select { flex: 1; min-width: 0; min-height: 2rem; font-size: var(--fs-sm); }
@@ -481,6 +477,15 @@ legend { font-weight: 700; padding: 0 .5rem 0 0; font-size: var(--fs-base); }
 .note-status > .i { color: var(--flag-strong); }
 .note-line { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .note-crop { display: block; width: 100%; height: auto; max-height: 8rem; object-fit: contain; background: var(--well); border-radius: var(--r-ctl); }
+/* a line or paragraph: wide enough to show a photo line at a readable size; a long one scrolls sideways */
+.line-pop { width: min(34rem, 92vw); }
+.line-pop .note-status > .i { color: var(--muted); }
+.line-which { display: inline-flex; gap: .2rem; }
+.line-which .btn { min-height: 1.9rem; padding-inline: .55rem; }
+.line-body, .line-result { display: grid; gap: .55rem; }
+.line-crop { overflow: auto; max-height: 13rem; background: var(--well); border-radius: var(--r-ctl); overscroll-behavior: contain; }
+.line-crop canvas { display: block; }
+.line-why { margin: 0; font-size: var(--fs-sm); line-height: 1.7; color: var(--muted); }
 #noteWord { font-size: var(--fs-md); font-weight: 600; }
 
 .toast { position: fixed; bottom: 1.25rem; inset-inline-start: 50%; transform: translateX(50%); z-index: 60; max-width: min(34rem, 92vw); padding: .7rem 1.1rem; border-radius: var(--r-panel); background: var(--ink); color: var(--surface); font-size: var(--fs-sm); box-shadow: var(--shadow-2); animation: toast-in .2s var(--ease); }

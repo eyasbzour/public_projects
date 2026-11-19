@@ -30,6 +30,14 @@ def test_lines_group_into_heading_paragraph_bullet():
     ]
 
 
+def test_paragraph_lines_keep_their_place_and_where_their_text_starts():
+    lines = [Line([Word("نص", 95), Word("أول", 95)], 0, 60, 1000, 80),
+             Line([Word("تكملة", 95)], 600, 85, 1000, 105)]
+    [b] = lines_to_blocks(lines, 65, (), (1000, 500))
+    assert b["lines"] == [[0, 0.12, 1, 0.16, 0], [0.6, 0.17, 1, 0.21, 7]]
+    assert "".join(s["s"] for s in b["segs"])[b["lines"][1][4]:] == "تكملة"
+
+
 def test_ruled_table_found_and_words_go_into_cells():
     from PIL import Image, ImageDraw
     from engines.tables import find_tables
@@ -58,6 +66,11 @@ def test_ruled_table_found_and_words_go_into_cells():
     assert blocks[1]["type"] == "table" and "borderless" not in blocks[1]
     # columns count from the right, as the page reads
     assert blocks[1]["rows"] == [[[{"s": "أ"}], [{"s": "ب"}], [{"s": "ج"}]], [[], [], []]]
+    # with the page size each cell knows its place: the first cell is the rightmost column of the first row
+    sized = lines_to_blocks([Line([word("أ", 950), word("ب", 650), word("ج", 350)], 310, 620, 990, 660)], 65, grids, img.size)
+    first, last = sized[0]["cellBoxes"][0][0], sized[0]["cellBoxes"][1][2]
+    assert first[0] * 1240 == pytest.approx(800, abs=5) and first[2] * 1240 == pytest.approx(1100, abs=5) and first[1] * 1754 == pytest.approx(600, abs=5)
+    assert last[0] * 1240 == pytest.approx(200, abs=5) and last[3] * 1754 == pytest.approx(760, abs=5)
 
 
 def test_wide_gap_keeps_both_ends_of_a_row():
@@ -83,6 +96,12 @@ def test_lineless_table_from_column_gaps_that_line_up():
     assert [[c[0]["s"] for c in r] for r in blocks[0]["rows"]] == [
         ["اليوم", "الساعة", "المكان"], ["الأحد", "9:00", "قاعة"], ["الثلاثاء", "11:30", "مكتب"]]
     assert blocks[1]["type"] == "p"
+    # each cell's place: between the column gaps, on its row
+    boxes = lines_to_blocks(lines, 65, (), (1000, 500))[0]["cellBoxes"]
+    assert len(boxes) == 3 and all(len(r) == 3 for r in boxes)
+    right, mid = boxes[1][0], boxes[1][1]
+    assert right[0] * 1000 < 900 and right[2] * 1000 >= 1000 and mid[0] * 1000 < 705 and 780 < mid[2] * 1000 < 880
+    assert right[1] == 0.3 and right[3] == 0.36
 
 
 def test_claude_reply_markers_table_and_notes():

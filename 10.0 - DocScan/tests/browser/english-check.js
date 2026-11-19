@@ -35,7 +35,7 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
   await page.keyboard.press('Control+s'); await page.waitForTimeout(600);
   await page.selectOption('#formatSel', 'docx');
   const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.click('#btnExport')]);
-  const out = path.join(__dirname, '..', 'english-export.docx');
+  const out = path.join(__dirname, 'shots', 'english-export.docx');
   await dl.saveAs(out);
   check('Word file produced', true, out);
   check('no page errors', errors.length === 0, errors.join(' | '));
