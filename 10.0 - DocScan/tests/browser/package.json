@@ -1,0 +1,6 @@
+{
+  "name": "docscan-browser-checks",
+  "private": true,
+  "description": "Browser checks for the web app (Chrome, through playwright-core). See README.md.",
+  "devDependencies": { "playwright-core": "1.56.1" }
+}

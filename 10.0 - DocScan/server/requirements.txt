@@ -1,0 +1,14 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+pillow>=10
+numpy>=1.26
+opencv-python-headless>=4.10   # ruled-table detection for the free engines
+pytesseract>=0.3.10
+httpx>=0.27
+anthropic>=0.40
+
+# Optional engines (large downloads, CPU is fine but slow). Install only if wanted:
+#   pip install easyocr
+#   pip install paddlepaddle paddleocr
+#   pip install torch transformers accelerate      (Nuqta, the most accurate for Arabic; transformers >= 5.23)

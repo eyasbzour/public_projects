@@ -1,0 +1,18 @@
+{
+  "name": "docscan-editor-bundle",
+  "private": true,
+  "description": "Builds web/vendor/tiptap.min.js (the text editor engine) so the app itself needs no build step. Run: npm ci && npm run build",
+  "scripts": {
+    "build": "esbuild entry.js --bundle --minify --format=iife --target=chrome100 --legal-comments=eof --outfile=../../web/vendor/tiptap.min.js"
+  },
+  "devDependencies": {
+    "@phosphor-icons/core": "2.1.1",
+    "@tiptap/core": "3.34.0",
+    "@tiptap/extension-table": "3.34.0",
+    "@tiptap/extension-text-align": "3.34.0",
+    "@tiptap/extension-text-style": "3.34.0",
+    "@tiptap/pm": "3.34.0",
+    "@tiptap/starter-kit": "3.34.0",
+    "esbuild": "0.28.2"
+  }
+}

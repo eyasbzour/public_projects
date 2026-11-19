@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>تحويل الوثائق</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%2314532d%27/%3E%3Cpath d=%27M9 8h14M9 13h14M9 18h14M9 23h9%27 stroke=%27white%27 stroke-width=%272.5%27/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="brand" id="brand" type="button" aria-label="الصفحة الرئيسية">
+    <span class="brand-mark" aria-hidden="true"><svg class="i"><use href="vendor/icons.svg#scan"/></svg></span>
+    <span class="brand-name">تحويل الوثائق المصوّرة إلى مستندات</span>
+  </button>
+  <div class="topbar-actions">
+    <button class="btn ghost" id="btnSettings" type="button">
+      <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#gear"/></svg><span>الإعدادات</span>
+    </button>
+  </div>
+</header>
+
+<!-- the Windows program: a newer version on GitHub -->
+<div id="updateBar" class="update-bar hidden" role="status">
+  <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-clockwise"/></svg>
+  <span id="updateText"></span>
+  <button class="btn small primary" id="btnUpdate" type="button">تحديث الآن</button>
+  <button class="btn ghost small" id="updateLater" type="button">لاحقاً</button>
+</div>
+
+<!-- ============================ HOME ============================ -->
+<main id="viewHome" class="view home">
+  <header class="home-head">
+    <h1>المسودات</h1>
+    <p class="muted">أضف صور الصفحات بالترتيب، اقرأها، راجع النص مقابل الصورة، ثم أنتج الملف بالترويسة.</p>
+  </header>
+
+  <form id="formNew" class="new-form">
+    <label class="field grow">اسم الوثيقة<input id="newName" required placeholder="مثال: كتاب الأمانة العامة إلى المعهد"></label>
+    <label class="field">اسمك<input id="newOwner" placeholder="اختياري"></label>
+    <button class="btn primary" type="submit">
+      <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#plus"/></svg><span>مسودة جديدة</span>
+    </button>
+  </form>
+
+  <section class="drafts" aria-labelledby="draftsTitle">
+    <div class="section-head">
+      <h2 id="draftsTitle">المسودات المحفوظة <span class="count" id="draftCount"></span></h2>
+      <button class="btn ghost small icon-only" id="btnRefresh" type="button" title="تحديث القائمة" aria-label="تحديث القائمة">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-clockwise"/></svg>
+      </button>
+    </div>
+    <div id="draftFilters" class="filter-chips hidden" aria-live="polite"></div>
+    <div id="draftList" class="draft-list"><p class="muted">جارٍ التحميل…</p></div>
+    <!-- one panel for the column searches; a desktop shows the clicked column's field, a phone (where two columns are hidden) shows all three -->
+    <div id="colFilter" class="pop col-filter hidden" role="dialog" aria-label="البحث في الأعمدة">
+      <label class="field" data-col="name">ابحث في اسم الوثيقة<input type="search" data-col="name" autocomplete="off"></label>
+      <label class="field" data-col="owner">ابحث في اسم الشخص<input type="search" data-col="owner" autocomplete="off"></label>
+      <label class="field" data-col="pages">عدد الصفحات<input type="number" min="0" inputmode="numeric" data-col="pages"></label>
+    </div>
+  </section>
+</main>
+
+<!-- ============================ DRAFT ============================ -->
+<main id="viewDraft" class="view work hidden">
+  <div class="draftbar">
+    <div class="draftbar-start">
+      <button class="btn ghost icon-only" id="btnBack" type="button" title="رجوع إلى المسودات" aria-label="رجوع إلى المسودات">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrow-right"/></svg>
+      </button>
+      <input id="draftName" class="name-input" aria-label="اسم الوثيقة">
+      <span id="saveState" class="save-state" role="status">محفوظ</span>
+    </div>
+    <div class="draftbar-end">
+      <button class="btn ghost" id="btnSave" type="button" title="حفظ (Ctrl+S)">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#floppy-disk"/></svg><span>حفظ</span>
+      </button>
+      <details class="pop-wrap" id="outPop">
+        <summary class="btn ghost">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#sliders-horizontal"/></svg><span>الترويسة والخيارات</span>
+        </summary>
+        <div class="pop opts-pop">
+          <section class="pop-sec" aria-labelledby="optTplHead">
+            <h3 class="pop-head" id="optTplHead">الترويسة</h3>
+            <select id="templateSel" aria-labelledby="optTplHead"></select>
+          </section>
+          <section class="pop-sec" aria-labelledby="optDocHead">
+            <h3 class="pop-head" id="optDocHead">المستند</h3>
+            <label class="field">التاريخ<input type="date" id="draftDate"></label>
+            <div class="field-row">
+              <label class="field grow">الخط<input id="optFontName" list="fontNames" placeholder="خط القالب" autocomplete="off"></label>
+              <label class="field">الحجم (نقطة)<input id="optFont" type="number" min="6" max="72" step="0.5" value="14" inputmode="decimal"></label>
+            </div>
+            <datalist id="fontNames">
+              <option value="Simplified Arabic"></option><option value="Traditional Arabic"></option><option value="Sakkal Majalla"></option>
+              <option value="Arial"></option><option value="Tahoma"></option><option value="Times New Roman"></option><option value="Calibri"></option>
+            </datalist>
+          </section>
+          <section class="pop-sec" aria-labelledby="optOutHead">
+            <h3 class="pop-head" id="optOutHead">عند إنتاج الملف</h3>
+            <label class="check"><input type="checkbox" id="optHighlight" checked> تظليل المواضع غير الواضحة</label>
+            <label class="check"><input type="checkbox" id="optPageBreaks" checked> كل صورة في صفحة جديدة</label>
+            <label class="check"><input type="checkbox" id="optMargin" checked> الملاحظات كحواشٍ أسفل الصفحة في PDF والصور</label>
+          </section>
+        </div>
+      </details>
+      <label class="inline-field"><span class="sr-only">الصيغة</span><select id="formatSel" aria-label="صيغة الملف"><option value="docx">Word (.docx)</option></select></label>
+      <button class="btn" id="btnQuick" type="button" title="يقرأ كل الصفحات غير المقروءة ثم ينتج الملف مباشرة، والمواضع غير الواضحة تُظلَّل">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#lightning"/></svg><span>قراءة الكل والإنتاج</span>
+      </button>
+      <button class="btn primary" id="btnExport" type="button">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#file-arrow-down"/></svg><span>إنتاج الملف</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="pane-tabs" role="tablist" aria-label="أقسام المسودة">
+    <button type="button" role="tab" data-pane="pages" aria-selected="false">الصفحات</button>
+    <button type="button" role="tab" data-pane="photo" aria-selected="false">الصورة</button>
+    <button type="button" role="tab" data-pane="text" aria-selected="true">النص</button>
+  </div>
+
+  <div class="workspace" id="workspace" data-pane="text">
+    <!-- pages -->
+    <aside class="pane pages" id="panePages" aria-label="الصفحات">
+      <button class="rail" type="button" data-pane="pages" aria-label="إظهار الصفحات" title="إظهار الصفحات">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-out-line-horizontal"/></svg><span>الصفحات</span>
+      </button>
+      <div class="pane-head">
+        <button class="btn ghost small icon-only pane-collapse" type="button" data-pane="pages" aria-label="طي الصفحات" title="طي الصفحات">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-in-line-horizontal"/></svg>
+        </button>
+        <h2>الصفحات <span class="count" id="pageCount"></span></h2>
+        <label class="btn small primary file-btn">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#images"/></svg><span>إضافة صور</span>
+          <input type="file" id="fileAdd" accept="image/*" multiple>
+        </label>
+      </div>
+      <div class="order-row">
+        <label class="inline-field">الترتيب
+          <select id="orderSel">
+            <option value="name">بالاسم (1، 2، 10)</option>
+            <option value="alpha">أبجدي</option>
+            <option value="date">تاريخ الصورة</option>
+            <option value="picked">كما اخترتها</option>
+          </select>
+        </label>
+        <button class="btn ghost small icon-only" id="btnResort" type="button" title="أعد ترتيب الصفحات الحالية بهذه الطريقة" aria-label="أعد ترتيب الصفحات">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#sort-ascending"/></svg>
+        </button>
+      </div>
+      <ol id="pageList" class="page-list"></ol>
+      <div class="drop-zone" id="dropHint">
+        <svg class="i big" aria-hidden="true"><use href="vendor/icons.svg#images"/></svg>
+        <p>اسحب صور الصفحات إلى هنا، أو</p>
+        <button class="btn small" id="btnPick" type="button">اختر الصور</button>
+        <p class="muted small-print">بعد الإضافة يمكنك سحب الصفحات لتغيير ترتيبها.</p>
+      </div>
+    </aside>
+
+    <div class="splitter" data-pane="pages" role="separator" aria-orientation="vertical" aria-controls="panePages" tabindex="0" aria-label="تغيير عرض قائمة الصفحات" title="اسحب لتغيير العرض، انقر مرتين للإرجاع"></div>
+
+    <!-- photo -->
+    <section class="pane photo" id="panePhoto" aria-label="صورة الصفحة">
+      <button class="rail" type="button" data-pane="photo" aria-label="إظهار الصورة" title="إظهار الصورة">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-out-line-horizontal"/></svg><span>الصورة</span>
+      </button>
+      <div class="pane-head tools">
+        <button class="btn ghost small icon-only pane-collapse" type="button" data-pane="photo" aria-label="طي الصورة" title="طي الصورة">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-in-line-horizontal"/></svg>
+        </button>
+        <button class="btn small" id="btnEditImg" type="button" title="تدوير، قص، تقويم، سطوع وتباين">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#crop"/></svg><span>تحرير الصورة</span>
+        </button>
+        <button class="btn ghost small icon-only" id="rotL" type="button" title="تدوير لليسار" aria-label="تدوير لليسار">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrow-counter-clockwise"/></svg>
+        </button>
+        <button class="btn ghost small icon-only" id="rotR" type="button" title="تدوير لليمين" aria-label="تدوير لليمين">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrow-clockwise"/></svg>
+        </button>
+        <label class="zoom" title="تكبير (أو Ctrl مع عجلة الفأرة)">
+          <span class="sr-only">تكبير</span>
+          <input type="range" id="zoom" min="40" max="400" value="100">
+          <output id="zoomVal" class="muted">100%</output>
+        </label>
+        <span class="photo-label muted" id="photoLabel"></span>
+      </div>
+      <div class="photo-frame" id="photoFrame"><img id="photoImg" alt="" draggable="false">
+        <div class="photo-empty hidden" id="photoEmpty">
+          <svg class="i big" aria-hidden="true"><use href="vendor/icons.svg#images"/></svg>
+          <b>أضف صور صفحات الوثيقة</b>
+          <p>اسحب الصور إلى هنا، أو اخترها من الجهاز. يمكنك ترتيبها بعد ذلك.</p>
+          <button class="btn primary" id="btnPickBig" type="button">
+            <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#images"/></svg><span>اختر الصور</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <div class="splitter" data-pane="photo" role="separator" aria-orientation="vertical" aria-controls="panePhoto" tabindex="0" aria-label="تغيير عرض الصورة" title="اسحب لتغيير العرض، انقر مرتين للإرجاع"></div>
+
+    <!-- text -->
+    <section class="pane editor-pane" id="paneText" aria-label="نص الصفحة">
+      <button class="rail" type="button" data-pane="text" aria-label="إظهار النص" title="إظهار النص">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-out-line-horizontal"/></svg><span>النص</span>
+      </button>
+      <div class="pane-head read-bar">
+        <button class="btn ghost small icon-only pane-collapse" type="button" data-pane="text" aria-label="طي النص" title="طي النص">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-in-line-horizontal"/></svg>
+        </button>
+        <label class="inline-field">المحرك <select id="engineSel"></select></label>
+        <details class="pop-wrap" id="readPop">
+          <summary class="btn ghost small" title="خيارات القراءة">
+            <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#sliders-horizontal"/></svg><span>خيارات</span>
+          </summary>
+          <div class="pop">
+            <label class="field" id="cleanupWrap">تحسين الصورة
+              <select id="cleanupSel">
+                <option value="clean" selected>تنظيف</option>
+                <option value="bw">أبيض وأسود</option>
+                <option value="none">بدون</option>
+              </select>
+            </label>
+            <label class="field" id="langsWrap">اللغة
+              <select id="langsSel">
+                <option value="ara+eng" selected>عربي وإنجليزي</option>
+                <option value="ara">عربي فقط</option>
+              </select>
+            </label>
+            <label class="field">اتجاه الصفحة
+              <select id="dirSel">
+                <option value="auto" selected>تلقائي من النص</option>
+                <option value="rtl">من اليمين (عربي)</option>
+                <option value="ltr">من اليسار (إنجليزي)</option>
+              </select>
+            </label>
+            <label class="field hidden" id="modelWrap">النموذج <select id="modelSel"></select></label>
+            <label class="check hidden" id="skipWrap"><input type="checkbox" id="skipLetterhead" checked> تجاهل ترويسة الأصل</label>
+          </div>
+        </details>
+        <button class="btn primary small" id="btnRead" type="button">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#scan"/></svg><span>اقرأ الصفحة</span>
+        </button>
+        <button class="btn small" id="btnReadAll" type="button">اقرأ غير المقروء</button>
+        <span id="readState" class="read-state muted" role="status"></span>
+      </div>
+      <div class="edit-bar">
+        <div class="fmt-bar" id="fmtBar" role="toolbar" aria-label="تنسيق النص"></div>
+        <details class="pop-wrap" id="verPop">
+          <summary class="btn ghost small" title="القراءات والنسخ السابقة لنص هذه الصفحة">
+            <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#clock-counter-clockwise"/></svg><span>النسخ</span>
+          </summary>
+          <div class="pop ver-pop"><ul id="verList" class="ver-list"></ul></div>
+        </details>
+      </div>
+      <div class="editor-scroll" id="editorScroll">
+        <div id="editor" class="editor sheet" aria-label="نص الصفحة"></div>
+      </div>
+      <div class="splitter row" id="flagSplit" data-pane="flags" role="separator" aria-orientation="horizontal" aria-controls="flagsPanel" tabindex="0" aria-label="تغيير ارتفاع قائمة المواضع المعلّمة" title="اسحب لتغيير الارتفاع، انقر مرتين للإرجاع"></div>
+      <details class="flags" id="flagsPanel" open>
+        <summary>
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#flag"/></svg>
+          <span>المواضع المعلَّمة</span> <span id="flagCount" class="pill">0</span>
+          <svg class="i chev" aria-hidden="true"><use href="vendor/icons.svg#caret-down"/></svg>
+        </summary>
+        <div class="flags-tools" id="flagTools">
+          <select id="flagEngine" aria-label="القارئ لإعادة القراءة"></select>
+          <button class="btn ghost small" id="flagReread" type="button" title="يقرأ كل موضع معلَّم في هذه الصفحة من الصورة بالقارئ المختار، ويعرض قراءته بجانبه">
+            <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#scan"/></svg><span>أعد قراءة المواضع</span>
+          </button>
+          <button class="btn ghost small hidden" id="flagUseAll" type="button">استخدام كل الاقتراحات</button>
+        </div>
+        <ul id="flagList"></ul>
+      </details>
+    </section>
+  </div>
+</main>
+
+<!-- ============================ SETTINGS ============================ -->
+<dialog id="dlgSettings" aria-labelledby="setTitle">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head">
+      <h2 id="setTitle">الإعدادات</h2>
+      <button class="btn ghost small icon-only" value="cancel" formnovalidate aria-label="إغلاق">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
+      </button>
+    </div>
+    <label class="field">اسمك (يظهر كاتب الملاحظات في Word)<input id="setAuthor"></label>
+    <fieldset>
+      <legend>مفاتيح الذكاء الاصطناعي</legend>
+      <p class="muted small-print">يُرسَل المفتاح إلى الخادم مع كل قراءة فقط ولا يُحفظ هناك. عند اختيار محرك ذكاء اصطناعي تُرسَل صورة الصفحة إلى الشركة المزوِّدة.</p>
+      <label class="field">مفتاح Claude API<input id="setClaude" type="password" autocomplete="off" placeholder="sk-ant-…" dir="ltr"></label>
+      <label class="field">مفتاح Google Vision<input id="setGoogle" type="password" autocomplete="off" dir="ltr"></label>
+      <label class="check"><input type="checkbox" id="setRemember"> تذكر المفاتيح على هذا الجهاز</label>
+    </fieldset>
+    <fieldset id="adminBox">
+      <legend>قوالب الترويسة</legend>
+      <ul id="tplList" class="tpl-list"></ul>
+      <button class="btn small" id="btnTplNew" type="button">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#plus"/></svg><span>إضافة قالب جديد</span>
+      </button>
+    </fieldset>
+    <div class="dlg-actions">
+      <button class="btn primary" value="save" id="btnSettingsSave">حفظ</button>
+      <button class="btn ghost" value="cancel" formnovalidate>إغلاق</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- add a header template (from settings or from the template list) -->
+<dialog id="dlgTpl" aria-labelledby="tplTitle">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head">
+      <h2 id="tplTitle">إضافة قالب ترويسة</h2>
+      <button class="btn ghost small icon-only" value="cancel" formnovalidate aria-label="إغلاق">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
+      </button>
+    </div>
+    <p class="muted small-print">ملف Word فيه الترويسة والتذييل. يُستبدل نص الصفحة بالمحتوى وتبقى الترويسة والتذييل. اكتب {{DATE}} في الترويسة ليُملأ التاريخ تلقائياً.</p>
+    <label class="field">اسم القالب<input id="tplName" autocomplete="off" placeholder="مثال: ترويسة الإدارة العامة"></label>
+    <div class="field">
+      <span>ملف Word (.docx)</span>
+      <label class="btn file-btn tpl-file">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#file-arrow-down"/></svg><span id="tplFileName">اختر الملف</span>
+        <input type="file" id="tplFile" accept=".docx">
+      </label>
+    </div>
+    <label class="field" id="tplTokenWrap">رمز المسؤول<input id="tplToken" type="password" autocomplete="off" dir="ltr"></label>
+    <div class="dlg-actions">
+      <button class="btn primary" id="btnTplAdd" type="button">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#plus"/></svg><span>إضافة القالب</span>
+      </button>
+      <button class="btn ghost" value="cancel" formnovalidate>إلغاء</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- image editor -->
+<dialog id="dlgImage" class="img-dlg" aria-label="تحرير الصورة">
+  <div class="img-ed">
+    <div class="img-ed-tools">
+      <div class="tool-group">
+        <button class="btn small icon-only" type="button" id="ieRotL" title="تدوير 90° لليسار" aria-label="تدوير 90 درجة لليسار">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrow-counter-clockwise"/></svg>
+        </button>
+        <button class="btn small icon-only" type="button" id="ieRotR" title="تدوير 90° لليمين" aria-label="تدوير 90 درجة لليمين">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrow-clockwise"/></svg>
+        </button>
+        <label class="inline-field">تقويم <input type="range" id="ieFine" min="-20" max="20" step="0.25" value="0"><output id="ieFineVal" class="muted">0°</output></label>
+      </div>
+      <div class="tool-group">
+        <button class="btn small" type="button" id="ieCrop" aria-pressed="false">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#crop"/></svg><span>قص</span>
+        </button>
+        <label class="inline-field">السطوع <input type="range" id="ieBright" min="50" max="160" value="100"></label>
+        <label class="inline-field">التباين <input type="range" id="ieContrast" min="50" max="200" value="100"></label>
+        <label class="check"><input type="checkbox" id="ieGray"> رمادي</label>
+      </div>
+      <div class="tool-group">
+        <label class="inline-field">تكبير <input type="range" id="ieZoom" min="50" max="400" value="100"></label>
+        <button class="btn ghost small" type="button" id="ieReset">إعادة الضبط</button>
+      </div>
+      <span class="spacer"></span>
+      <div class="tool-group">
+        <button class="btn ghost small" type="button" id="ieRestore">استعادة الأصل</button>
+        <button class="btn ghost small" type="button" id="ieCancel">إلغاء</button>
+        <button class="btn primary small" type="button" id="ieSave">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#check-circle"/></svg><span>حفظ الصورة</span>
+        </button>
+      </div>
+    </div>
+    <div class="img-ed-stage" id="ieStage">
+      <div class="img-ed-canvas" id="ieCanvasWrap">
+        <canvas id="ieCanvas"></canvas>
+        <div id="ieCropBox" class="crop-box hidden">
+          <span class="h nw" data-h="nw"></span><span class="h ne" data-h="ne"></span>
+          <span class="h sw" data-h="sw"></span><span class="h se" data-h="se"></span>
+          <span class="h n" data-h="n"></span><span class="h s" data-h="s"></span>
+          <span class="h w" data-h="w"></span><span class="h e" data-h="e"></span>
+        </div>
+      </div>
+    </div>
+    <p class="muted small-print img-ed-hint">اسحب إطار القص أو زواياه. التقويم يعدّل ميلان الصور الملتقطة بزاوية. تُحفظ نسخة جديدة وتبقى الأصلية قابلة للاستعادة.</p>
+  </div>
+</dialog>
+
+<!-- flagged word: fix the word, see its note and its spot on the photo -->
+<div id="notePop" class="note-pop hidden" role="dialog" aria-label="تصحيح الموضع المعلّم">
+  <div class="note-status">
+    <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#flag"/></svg>
+    <span id="noteStatus" class="note-line"></span>
+    <button class="btn ghost small icon-only" id="noteClose" type="button" aria-label="إغلاق">
+      <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
+    </button>
+  </div>
+  <canvas id="noteCrop" class="note-crop hidden" role="img" aria-label="الموضع في صورة الصفحة"></canvas>
+  <label class="field">النص<input id="noteWord" dir="rtl" autocomplete="off" spellcheck="false"></label>
+  <div class="note-reread" id="noteReread">
+    <select id="noteEngine" aria-label="القارئ"></select>
+    <button class="btn ghost small" id="noteReadBtn" type="button">
+      <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#scan"/></svg><span>اقرأها بقارئ آخر</span>
+    </button>
+  </div>
+  <button class="suggest hidden" id="noteSuggest" type="button"></button>
+  <textarea id="noteText" class="hidden" rows="3" aria-label="الملاحظة" placeholder="لماذا عُلِّم هذا الموضع؟"></textarea>
+  <div class="note-actions">
+    <button class="btn primary small" id="noteSave" type="button">حفظ</button>
+    <button class="btn ghost small" id="noteRemove" type="button" title="يبقى النص كما صححته وتزول الإشارة والملاحظة">
+      <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#check-circle"/></svg><span>حفظ وإزالة التعليم</span>
+    </button>
+  </div>
+</div>
+
+<!-- the app's own confirm / message box (in place of the browser's) -->
+<dialog id="dlgAsk" class="ask-dlg" aria-labelledby="askText">
+  <form method="dialog" class="dlg">
+    <p id="askText" class="ask-text"></p>
+    <div class="dlg-actions">
+      <button class="btn primary" id="askOk" value="ok">متابعة</button>
+      <button class="btn ghost" id="askCancel" value="cancel">إلغاء</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+<script src="vendor/jszip.min.js"></script>
+<script src="vendor/tiptap.min.js"></script>
+<script src="js/blocks-doc.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/docx-export.js"></script>
+<script src="js/image-editor.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

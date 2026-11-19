@@ -1,0 +1,9 @@
+data/
+__pycache__/
+*.pyc
+.venv/
+lo-profile/
+.pytest_cache/
+build/
+desktop/Arabic.isl
+tests/browser/node_modules/

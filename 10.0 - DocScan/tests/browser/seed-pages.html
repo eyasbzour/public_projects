@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<style>
+  body { margin: 0; background: #888; }
+  .page { width: 1240px; height: 1754px; padding: 130px 120px; box-sizing: border-box; background: #fbfaf5;
+          font-family: "Traditional Arabic", "Simplified Arabic", Arial, sans-serif; font-size: 34px; line-height: 1.9; color: #1c1c1c; position: relative; overflow: hidden; }
+  .ref { display: flex; justify-content: space-between; font-size: 28px; margin-bottom: 50px; }
+  h1 { text-align: center; font-size: 40px; margin: 36px 0; }
+  h2 { font-size: 36px; margin: 20px 0; }
+  .end { text-align: left; margin-top: 70px; }
+  .center { text-align: center; }
+  .stamp { position: absolute; width: 250px; height: 250px; border: 6px solid rgba(40,70,170,.6); border-radius: 50%;
+           color: rgba(40,70,170,.6); display: grid; place-items: center; font-size: 30px; }
+  .hand { position: absolute; font-family: "Aldhabi", "Diwani Letter", "Traditional Arabic", serif; color: #1d3fa0; font-size: 44px; }
+  .hl { background: linear-gradient(transparent 20%, rgba(255, 235, 0, .55) 20%, rgba(255, 235, 0, .55) 85%, transparent 85%); }
+  table { width: 100%; border-collapse: collapse; font-size: 30px; margin: 20px 0 30px; }
+  th, td { border: 2px solid #333; padding: 8px 16px; text-align: right; }
+  th { background: #eee; }
+  ul { margin: 10px 0; padding-right: 50px; }
+  .foot { position: absolute; bottom: 70px; left: 0; right: 0; text-align: center; font-size: 26px; color: #555; }
+  /* phone photo of a page lying on a desk */
+  .desk { width: 1240px; height: 1650px; background: radial-gradient(circle at 70% 20%, #7a6650, #3d3226 75%); position: relative; overflow: hidden; }
+  .desk .page { position: absolute; top: 60px; left: 90px; transform: rotate(3.5deg) scale(.86); transform-origin: top left;
+                box-shadow: 0 30px 60px rgba(0,0,0,.55); }
+  .desk::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, rgba(255,255,240,.10), rgba(0,0,0,.28)); }
+</style></head>
+<body>
+
+<!-- 1. letter with stamp, handwritten note and highlighter -->
+<div class="page" id="letter">
+  <div class="ref"><span>الرقم: م ض / 245 / 2026</span><span>التاريخ: 10/11/2026</span></div>
+  <p>السيد مدير دائرة الخدمات الإلكترونية المحترم،</p>
+  <p>تحية طيبة وبعد،</p>
+  <h1>الموضوع: تحديث أنظمة الأرشفة</h1>
+  <p>نرجو التكرم بتزويدنا بقائمة الأجهزة الموجودة في قسم الأرشيف، مع بيان حالة كل جهاز وتاريخ آخر صيانة له، وذلك تمهيداً لإعداد خطة التحديث للعام القادم.</p>
+  <p><span class="hl">كما نرجو تحديد الموظف المسؤول عن متابعة هذا الموضوع، وإرسال الرد خلال أسبوعين من تاريخه.</span></p>
+  <p>وتفضلوا بقبول فائق الاحترام،</p>
+  <p class="end">مدير الدائرة</p>
+  <div class="stamp" style="left: 170px; bottom: 250px; transform: rotate(-14deg)">ختم الدائرة</div>
+  <div class="hand" style="left: 110px; top: 470px; transform: rotate(-9deg)">يُحال إلى قسم الحاسوب للمتابعة</div>
+</div>
+
+<!-- 2. two-page report with a table -->
+<div class="page" id="report1">
+  <div class="ref"><span>قسم الحاسوب</span><span>التاريخ: 15/11/2026</span></div>
+  <h1>تقرير حالة أجهزة قسم الأرشيف</h1>
+  <p>بناءً على كتابكم رقم م ض / 245 / 2026، قمنا بحصر الأجهزة الموجودة في قسم الأرشيف وفحصها، وكانت النتائج كما في الجدول التالي:</p>
+  <table>
+    <tr><th>الجهاز</th><th>العدد</th><th>الحالة</th><th>آخر صيانة</th></tr>
+    <tr><td>ماسح ضوئي</td><td>3</td><td>يعمل</td><td>02/2026</td></tr>
+    <tr><td>طابعة ليزر</td><td>2</td><td>يحتاج صيانة</td><td>09/2025</td></tr>
+    <tr><td>حاسوب مكتبي</td><td>6</td><td>يعمل</td><td>06/2026</td></tr>
+    <tr><td>خادم الأرشفة</td><td>1</td><td>متوقف</td><td>11/2024</td></tr>
+  </table>
+  <p>يتبين من الجدول أن خادم الأرشفة متوقف منذ سنتين تقريباً، وهو أهم ما يجب معالجته في خطة التحديث.</p>
+  <div class="foot">صفحة 1 من 2</div>
+</div>
+
+<div class="page" id="report2">
+  <h2>التوصيات</h2>
+  <ul>
+    <li>استبدال خادم الأرشفة بخادم جديد مع نسخ احتياطي يومي.</li>
+    <li>صيانة الطابعتين قبل نهاية العام.</li>
+    <li>تدريب موظفي القسم على نظام الأرشفة الجديد.</li>
+  </ul>
+  <p>وسنرسل لكم عروض الأسعار حال وصولها إلينا.</p>
+  <p>مع الاحترام،</p>
+  <p class="end">رئيس قسم الحاسوب</p>
+  <div class="hand" style="right: 140px; bottom: 300px; transform: rotate(4deg)">موافق، يُدرج في خطة 2027</div>
+  <div class="foot">صفحة 2 من 2</div>
+</div>
+
+<!-- 4. a table printed without grid lines (only a rule under the header) -->
+<div class="page" id="borderless">
+  <div class="ref"><span>قسم الأرشيف</span><span>التاريخ: 17/11/2026</span></div>
+  <h1>مواعيد تدريب الموظفين على نظام الأرشفة</h1>
+  <p>يُعقد التدريب حسب الجدول التالي:</p>
+  <table style="width: 85%; margin: 30px auto; font-size: 32px">
+    <tr><th style="border: 0; border-bottom: 2px solid #333; background: none">اليوم</th><th style="border: 0; border-bottom: 2px solid #333; background: none">الساعة</th><th style="border: 0; border-bottom: 2px solid #333; background: none">المكان</th></tr>
+    <tr><td style="border: 0; padding: 14px 16px">الأحد</td><td style="border: 0">9:00</td><td style="border: 0">قاعة الاجتماعات</td></tr>
+    <tr><td style="border: 0; padding: 14px 16px">الثلاثاء</td><td style="border: 0">11:30</td><td style="border: 0">مكتب المدير</td></tr>
+    <tr><td style="border: 0; padding: 14px 16px">الخميس</td><td style="border: 0">13:00</td><td style="border: 0">قسم الأرشيف</td></tr>
+  </table>
+  <p>يُرجى من كل قسم إرسال أسماء المشاركين قبل يوم الأحد.</p>
+</div>
+
+<!-- 3. a circular photographed on a desk with a phone (skewed, shadowed, compressed) -->
+<div class="desk" id="photo">
+  <div class="page">
+    <div class="ref"><span>تعميم رقم 12 / 2026</span><span>التاريخ: 20/11/2026</span></div>
+    <p>إلى جميع الموظفين</p>
+    <h1>الموضوع: مواعيد الدوام في فصل الشتاء</h1>
+    <p>يبدأ الدوام الرسمي اعتباراً من 1/12/2026 الساعة الثامنة والنصف صباحاً، وينتهي الساعة الثالثة والنصف عصراً.</p>
+    <p><span class="hl">يُرجى من جميع الموظفين الالتزام بهذه المواعيد.</span></p>
+    <p class="end">المدير العام</p>
+    <div class="stamp" style="left: 200px; bottom: 330px; transform: rotate(8deg)">الإدارة العامة</div>
+  </div>
+</div>
+
+</body></html>
