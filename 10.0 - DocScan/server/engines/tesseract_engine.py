@@ -23,6 +23,11 @@ LANGS = os.environ.get("TESSERACT_LANGS", "ara+eng")
 def _langs_in(dir_: str) -> frozenset:
     if not shutil.which("tesseract"):
         return frozenset()
+    if dir_:  # a model folder: its languages are its files, no need to start tesseract for them
+        try:
+            return frozenset(f[:-len(".traineddata")] for f in os.listdir(dir_) if f.endswith(".traineddata"))
+        except OSError:
+            return frozenset()
     cmd = ["tesseract", "--list-langs"] + (["--tessdata-dir", dir_] if dir_ else [])
     try:
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=20).stdout

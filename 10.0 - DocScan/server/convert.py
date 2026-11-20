@@ -2,7 +2,7 @@
 
 Formats: docx (as is), pdf, odt, txt, png (one image per page; several pages come as a .zip).
 With LibreOffice (the Docker server), or with Microsoft Word on a Windows computer (the desktop program),
-whichever is there; PNG pages come from the PDF (pdftoppm, or PyMuPDF).
+whichever is there; PNG pages come from the PDF (pdftoppm, or pypdfium2).
 """
 from __future__ import annotations
 
@@ -33,9 +33,9 @@ def _has_word() -> bool:
         return False
 
 
-def _has_pymupdf() -> bool:
+def _has_pdfium() -> bool:
     try:
-        import pymupdf  # noqa: F401
+        import pypdfium2  # noqa: F401
         return True
     except Exception:
         return False
@@ -61,7 +61,7 @@ def available() -> dict:
     """Which formats this server can produce."""
     out = {"docx": True}
     out["pdf"] = out["odt"] = out["txt"] = bool(SOFFICE or WORD)
-    out["png"] = bool((SOFFICE or WORD) and (PDFTOPPM or _has_pymupdf()))
+    out["png"] = bool((SOFFICE or WORD) and (PDFTOPPM or _has_pdfium()))
     return out
 
 
@@ -162,12 +162,15 @@ def convert(docx: bytes, fmt: str, base_name: str) -> tuple[bytes, str, str]:
             r = subprocess.run([PDFTOPPM, "-r", str(PNG_DPI), "-png", str(pdf), str(tmp / "page")],
                                capture_output=True, text=True, timeout=180)
             err = r.stderr
-        elif _has_pymupdf():
-            import pymupdf
+        elif _has_pdfium():  # PDFium, Chrome's PDF engine (Apache/BSD): the Windows program has no pdftoppm
+            import pypdfium2
 
-            with pymupdf.open(pdf) as d:
-                for i, pg in enumerate(d, 1):
-                    pg.get_pixmap(dpi=PNG_DPI).save(str(tmp / f"page-{i}.png"))
+            doc = pypdfium2.PdfDocument(str(pdf))
+            try:
+                for i in range(len(doc)):
+                    doc[i].render(scale=PNG_DPI / 72).to_pil().save(str(tmp / f"page-{i + 1}.png"))
+            finally:
+                doc.close()  # Windows: the file stays locked, and the temporary folder undeletable, until closed
             err = ""
         else:
             raise ConvertError("لا توجد أداة لتحويل الصفحات إلى صور على هذا الجهاز")

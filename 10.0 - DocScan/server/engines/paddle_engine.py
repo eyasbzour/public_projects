@@ -5,6 +5,7 @@ PaddleOCR changed its Python API between 2.x (ocr()) and 3.x (predict()); both a
 from __future__ import annotations
 
 import threading
+from importlib.util import find_spec
 
 from .common import EngineError, Line, fragments_to_lines
 from .direction import ARABIC, LATIN
@@ -14,9 +15,7 @@ _lock = threading.Lock()
 
 
 def available() -> tuple[bool, str]:
-    try:
-        import paddleocr  # noqa: F401
-    except Exception:
+    if not find_spec("paddleocr"):  # looked up, not imported: listing the readers stays instant; a broken install shows when reading
         return False, "PaddleOCR غير مثبت على الخادم (pip install paddlepaddle paddleocr)"
     return True, ""
 

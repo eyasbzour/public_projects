@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>تحويل الوثائق: الدخول</title>
+<!-- the phone's way in (server/remote.py): the password shown on the PC gives this browser a session -->
+<script src="js/theme.js"></script>
+<link rel="stylesheet" href="css/app.css">
+<style>
+  body { overflow: auto; display: grid; place-items: center; min-height: 100dvh; padding: 1rem; box-sizing: border-box; }
+  .phone-in { width: min(22rem, 100%); display: grid; gap: 1.1rem; }
+  .phone-in .brand-mark { width: 2.5rem; height: 2.5rem; }
+  .phone-in h1 { font-size: var(--fs-lg); margin: 0; }
+  .phone-in input { font-size: 1.25rem; letter-spacing: .12em; text-align: center; }
+  .phone-in .error { color: var(--danger); margin: 0; font-size: var(--fs-sm); }
+  .phone-in .error:empty { display: none; }
+</style>
+</head>
+<body>
+<form class="phone-in" id="form">
+  <span class="brand-mark" aria-hidden="true"><svg class="i"><use href="vendor/icons.svg#scan"/></svg></span>
+  <h1>تحويل الوثائق المصوّرة إلى مستندات</h1>
+  <label class="field">كلمة المرور الظاهرة على شاشة الحاسوب
+    <input id="pw" required autocomplete="off" autocapitalize="none" spellcheck="false" dir="ltr" inputmode="text">
+  </label>
+  <p class="error" id="error" role="alert"></p>
+  <button class="btn primary" type="submit">دخول</button>
+</form>
+<script>
+  const pw = document.getElementById('pw'), error = document.getElementById('error');
+  pw.addEventListener('invalid', () => pw.setCustomValidity(pw.validity.valueMissing ? 'اكتب كلمة المرور أولاً.' : ''));
+  pw.addEventListener('input', () => { pw.setCustomValidity(''); error.textContent = ''; });
+  document.getElementById('form').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = e.submitter; btn.disabled = true;
+    try {
+      const res = await fetch('api/remote/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw.value }) });
+      if (res.ok) { location.replace('./'); return; }
+      error.textContent = (await res.json().catch(() => ({}))).error || 'تعذر الدخول.';
+    } catch (err) { error.textContent = 'تعذر الاتصال بالحاسوب. تأكد أن البرنامج مفتوح عليه.'; }
+    btn.disabled = false; pw.select();
+  };
+</script>
+</body>
+</html>

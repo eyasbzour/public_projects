@@ -36,11 +36,14 @@ It runs two ways: as a Windows program (an installer, no browser or server neede
 - The **editor** works like a page in Word: bold, italic, underline, strikethrough, text and highlight colors, any text size,
   three heading levels, quotes, alignment, left-to-right paragraphs, and undo. Select any lines to make them a bulleted or
   numbered list, then indent them. Tables take their size from a grid or from typed numbers, and their rows, columns, lines and
-  cell colors can all be changed. Pictures can be cut from the page photo (a logo, a chart, a signature). The tools for the
+  cell colors can all be changed. Pictures can be cut from the page photo (a logo, a chart, a signature): press تحديد on the
+  photo, drag a box around the part, move it if needed, then copy it or put it in the text. A copied part pastes into any
+  program at the photo's full resolution. The tools for the
   selected text, table or picture appear right above it, and clicking a highlighted word opens a small panel with its note,
   that spot of the photo, and the word ready to correct.
 - The **workspace** puts pages, photo and text side by side. Drag the bars between them to resize, or fold any part into a
-  thin rail. On a phone the three parts become tabs.
+  thin rail. On a phone the three parts become tabs, the text tools fit in one row, and menus open from the bottom of the
+  screen.
 - The **output** uses the chosen header template (header, footer and page setup kept, `{{DATE}}` filled in), the document
   font and size, and real Word lists and headings. Highlighted text keeps its note, as a Word comment in `.docx` and `.odt` and
   as a numbered footnote in PDF and PNG. Formats: `.docx`, PDF, `.odt`, PNG (one image, or a `.zip` for several pages) and `.txt`.
@@ -54,19 +57,36 @@ The pages in these pictures are made-up test letters.
 
 | | |
 |---|---|
-| ![A clicked line shown on the photo](docs/screenshots/line-on-photo.png) | ![A highlighted word with a second reader's suggestion](docs/screenshots/flagged-word.png) |
-| Click a line to see it on the photo, and read it again with another reader. | A highlighted word, its spot on the photo, and what a second reader made of it. |
+| ![A clicked line shown on the photo](docs/screenshots/line-on-photo.png) | ![A highlighted word and its note](docs/screenshots/flagged-word.png) |
+| Click a line to see it on the photo, and read it again with another reader. | Click a highlighted word to see why it was marked and correct it in place. |
 | ![A table cell shown on the photo](docs/screenshots/table-cell.png) | ![Formatting tools over selected text](docs/screenshots/text-tools.png) |
 | Table cells have their own spot on the photo. | The tools for selected text appear right above it. |
 | ![The drafts list](docs/screenshots/drafts.png) | ![Template, font and output options](docs/screenshots/output.png) |
 | Drafts can be searched by name, person or page count. | The template, the document's font and size, and what goes in the file. |
 | ![The workspace in the dark theme](docs/screenshots/dark.png) | ![The text and the photo on a phone](docs/screenshots/phone.png) |
-| The dark theme. | On a phone the pages, the photo and the text become tabs. |
+| The dark theme. | On a phone the pages, the photo and the text become tabs, with the text tools in one row at the bottom. |
+| ![Part of the photo selected, with copy and insert](docs/screenshots/select-part.png) | ![The phone link, its QR code and password](docs/screenshots/phone-link.png) |
+| Select part of the photo (a note in the margin, a stamp, a signature) to copy it or put it in the text. | Scan the code or open the link on a phone, then type the password. This link and password are made up. |
 
 ## Windows program
 
-The Windows program (an installer with updates) is built and released from its own repository,
-[eyasbzour/docscan](https://github.com/eyasbzour/docscan). Download it from that repository's releases.
+Download `DocScan-Setup-<version>.exe` from the [releases](../../releases) and run it. It installs for the current user
+(no administrator rights) with PaddleOCR and Tesseract, and asks whether to add Nuqta and EasyOCR (about 2 GB, downloaded only
+if chosen). If they were skipped, picking either one in the reader list, or الإعدادات > القرّاء الإضافيون, downloads them
+from inside the program. The program opens in its own window; closing it ends it completely. Drafts are kept in `%LOCALAPPDATA%\DocScan`.
+PDF, ODT and TXT need Microsoft Word or LibreOffice on the computer; Word files (`.docx`) always work.
+
+At start, and from الإعدادات > عن البرنامج, the program checks this repository's latest release and offers to update
+itself, with a list of what changed (ما الجديد؟). Without internet it says nothing at start.
+
+To use it on a phone from anywhere, press على الهاتف in the top bar. It shows a link, a QR code for it and a password. The
+phone works on the same drafts in its browser while the program stays open on the computer. The link and password are new
+each time, five wrong passwords in a minute lock sign-in for the rest of that minute, and updates, readers and the link itself
+are only controlled from the computer.
+
+To build it yourself: `desktop\build.ps1 -Version 1.0.0 -Parts` (needs Tesseract in `C:\Program Files\Tesseract-OCR`),
+then `iscc /DAppVersion=1.0.0 desktop\installer.iss` with Inno Setup 6. The GitHub workflow does both on a version tag
+(`git tag v1.0.1 && git push --tags`) and publishes the release.
 
 ## Run as a server with Docker
 
@@ -140,7 +160,7 @@ This repository ships only `plain.docx` (a page with the date at the top). Add y
 
 ```bash
 cd server && python -m pytest tests -q   # layout from the photo: tables, lists, handwriting marks, numbers, headings
-node --test web/js/                       # the Word file, and the editor's conversion to and from the page model
+node --test web/js/*.test.js             # the Word file, and the editor's conversion to and from the page model
 ```
 
 The text editor is Tiptap (MIT). It is bundled once into `web/vendor/tiptap.min.js` (`cd tools/editor && npm ci && npm run build`),
@@ -151,3 +171,32 @@ so the app itself needs no build step.
 The free readers run on your computer or server, so photos never leave it. Choosing Claude or Google Vision sends that
 page's photo to that company with the user's key. On a server, drafts and photos are visible to everyone who can open the
 app, so keep it on the internal network and set `APP_PASSWORD`.
+
+The Windows program also connects to GitHub. At start it asks this repository for its latest release, to offer updates,
+and it downloads the installer or the optional readers from those releases only when the user chooses to. Apart from the
+address that any web request carries, these requests include nothing about the user or their documents.
+
+Using the program on a phone is off until the user turns it on. Then the pages and photos the phone opens pass, encrypted,
+through Cloudflare's free tunnel service (the program downloads Cloudflare's `cloudflared.exe` for it the first time). The
+link and its password are new each time, and stopping it, or closing the program, ends both.
+
+## Code signing policy
+
+The Windows installer will be signed for free through SignPath once the project's application is approved. Until
+then, releases are unsigned. Signed releases carry this attribution: Free code signing provided by [SignPath.io](https://about.signpath.io),
+certificate by [SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [eyasbzour](https://github.com/eyasbzour)
+- Approvers: [eyasbzour](https://github.com/eyasbzour)
+
+The signed file is the installer that this repository's GitHub workflow builds from the source code here, and each signed
+release is approved by hand. The open-source components it bundles (Python, Tesseract, PaddleOCR and the libraries they
+use) are included as their own projects publish them.
+
+The program sends nothing to other computers unless the user asks it to, apart from the update check described under
+[Privacy](#privacy).
+
+## License
+
+MIT, see [LICENSE](LICENSE). The bundled readers and libraries keep their own licenses (Tesseract, PaddleOCR and the Nuqta
+model are Apache-2.0).

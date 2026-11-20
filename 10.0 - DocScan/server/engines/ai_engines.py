@@ -9,6 +9,7 @@ import base64
 import json
 import os
 import re
+from importlib.util import find_spec
 
 from .common import EngineError, Word, low_note, to_jpeg
 
@@ -124,9 +125,7 @@ def parse_claude_json(raw: str) -> list[dict]:
 
 
 def claude_available() -> tuple[bool, str]:
-    try:
-        import anthropic  # noqa: F401
-    except Exception:
+    if not find_spec("anthropic"):  # looked up, not imported: listing the readers stays instant
         return False, "مكتبة anthropic غير مثبتة على الخادم"
     return True, ""
 
@@ -162,9 +161,7 @@ def run_claude(img, api_key: str | None, model: str, skip_letterhead: bool) -> l
 
 # ---------------------------------------------------------------- Google Cloud Vision
 def google_available() -> tuple[bool, str]:
-    try:
-        import httpx  # noqa: F401
-    except Exception:
+    if not find_spec("httpx"):
         return False, "مكتبة httpx غير مثبتة على الخادم"
     return True, ""
 

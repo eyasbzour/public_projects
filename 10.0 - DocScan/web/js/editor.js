@@ -383,7 +383,7 @@
     };
     const button = (g, o) => {
       const b = document.createElement('button');
-      b.type = 'button'; b.className = 'tb' + (o.text ? ' tb-text' : '');
+      b.type = 'button'; b.className = 'tb' + (o.text ? ' tb-text' : '') + (o.cls ? ' ' + o.cls : '');
       b.title = o.label + (o.keys ? ' (' + o.keys + ')' : ''); b.setAttribute('aria-label', o.label);
       if (o.icon) b.append(icon(o.icon));
       if (o.text) b.append(document.createTextNode(o.text));
@@ -397,8 +397,15 @@
     const can = (pe, fn) => { try { return fn(pe.editor.can().chain().focus()).run(); } catch (e) { return false; } };
 
     // small panels under a toolbar button (colours, table size); one at a time, closed by Esc or a click elsewhere
+    // phones (app.css --phone-ui): one row where like tools share a menu (a sheet); panels come up as sheets too
+    const phone = () => getComputedStyle(document.documentElement).getPropertyValue('--phone-ui').trim() === '1';
     let open = null;
-    const closePop = () => { if (open) { open.pop.remove(); open.btn.setAttribute('aria-expanded', 'false'); open = null; } };
+    const closePop = () => {
+      if (!open) return;
+      const { pop, btn } = open; open = null;
+      btn.setAttribute('aria-expanded', 'false');
+      if (actions.slideOut) actions.slideOut(pop, () => pop.remove()); else pop.remove();
+    };
     const popover = (btn, build) => {
       btn.setAttribute('aria-haspopup', 'dialog'); btn.setAttribute('aria-expanded', 'false');
       btn.addEventListener('click', () => {
@@ -409,9 +416,11 @@
         pop.className = 'tb-pop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', btn.getAttribute('aria-label'));
         build(pop);
         document.body.append(pop);
-        const r = btn.getBoundingClientRect();
-        pop.style.top = (r.bottom + 4) + 'px';
-        pop.style.left = Math.max(8, Math.min(r.right - pop.offsetWidth, innerWidth - pop.offsetWidth - 8)) + 'px';
+        if (!phone()) {
+          const r = btn.getBoundingClientRect();
+          pop.style.top = (r.bottom + 4) + 'px';
+          pop.style.left = Math.max(8, Math.min(r.right - pop.offsetWidth, innerWidth - pop.offsetWidth - 8)) + 'px';
+        }
         btn.setAttribute('aria-expanded', 'true');
         open = { btn, pop };
         const first = pop.querySelector('button, input'); if (first) first.focus({ preventScroll: true });
@@ -426,7 +435,7 @@
       ['#000000', 'أسود'], ['#404040', 'رمادي داكن'], ['#7f7f7f', 'رمادي'], ['#bfbfbf', 'رمادي فاتح'], ['#f2f2f2', 'رمادي باهت'],
       ['#fce4d6', 'خوخي فاتح'], ['#fff2cc', 'أصفر باهت'], ['#e2efda', 'أخضر باهت'], ['#ddebf7', 'أزرق باهت'], ['#ede7f6', 'بنفسجي باهت']];
     const palette = (noneLabel, apply) => (pop) => {
-      const done = (c) => { apply(get(), c); closePop(); };
+      const done = (c) => { apply(get(), c); closePop(); closeDrops(); };
       const none = document.createElement('button');
       none.type = 'button'; none.className = 'pal-none'; none.textContent = noneLabel;
       none.addEventListener('click', () => done(null));
@@ -524,7 +533,7 @@
       const pe = get(); if (!pe) return;
       const row = () => ({ type: 'tableRow', content: Array.from({ length: cols }, () => ({ type: 'tableCell', content: [{ type: 'paragraph' }] })) });
       pe.insertBlock({ type: 'table', content: Array.from({ length: rows }, row) });
-      closePop();
+      closePop(); closeDrops();
     };
     // like Word: point at the grid for the size, or type any number of rows and columns
     popover(button(ins, { icon: 'table', text: 'جدول', label: 'إدراج جدول', run: () => {} }), (pop) => {
@@ -558,22 +567,79 @@
     });
     button(ins, { icon: 'images', text: 'صورة', label: 'إدراج جزء من صورة الصفحة (شعار، رسم، توقيع)', run: () => actions.picture(), always: true,
       enabled: () => actions.hasPage() });
-    button(ins, { icon: 'flag', text: 'تعليم', label: 'تعليم النص المحدد كملاحظة', run: () => actions.flag(), always: true, enabled: (pe) => !!pe });
+    const flagBtn = button(ins, { icon: 'flag', text: 'تعليم', label: 'تعليم النص المحدد كملاحظة', run: () => actions.flag(), always: true, enabled: (pe) => !!pe });
+    const insOwn = [...ins.children];
 
     // the line at the cursor: its spot on the photo, and reading it again with another engine (the app's panel)
     const again = group();
-    button(again, { icon: 'scan', text: 'أعد القراءة', label: 'السطر في صورة الصفحة، وقراءته بقارئ آخر', run: () => actions.showLine() });
+    const rereadBtn = button(again, { icon: 'scan', text: 'أعد القراءة', label: 'السطر في صورة الصفحة، وقراءته بقارئ آخر', run: () => actions.showLine() });
     // a click into the text shows that line on the photo; this turns that off and on (remembered on this computer)
-    button(again, { icon: 'eye', label: 'معاينة السطر من الصورة عند النقر', always: true, on: () => actions.previewOn(),
+    const eyeBtn = button(again, { icon: 'eye', cls: 'tb-eye', label: 'معاينة السطر من الصورة عند النقر', always: true, on: () => actions.previewOn(),
       run: () => { actions.togglePreview(); update(); } });
 
     const hist = group();
-    button(hist, { icon: 'arrow-u-up-right', label: 'تراجع', keys: 'Ctrl+Z', run: (pe) => pe.chain().undo().run(), enabled: (pe) => can(pe, (c) => c.undo()) });
-    button(hist, { icon: 'arrow-u-up-left', label: 'إعادة', keys: 'Ctrl+Y', run: (pe) => pe.chain().redo().run(), enabled: (pe) => can(pe, (c) => c.redo()) });
+    const undoBtn = button(hist, { icon: 'arrow-u-up-right', label: 'تراجع', keys: 'Ctrl+Z', run: (pe) => pe.chain().undo().run(), enabled: (pe) => can(pe, (c) => c.undo()) });
+    const redoBtn = button(hist, { icon: 'arrow-u-up-left', label: 'إعادة', keys: 'Ctrl+Y', run: (pe) => pe.chain().redo().run(), enabled: (pe) => can(pe, (c) => c.redo()) });
 
-    // two rows that sit side by side when the pane is wide: the text's look, then the paragraph, inserts and undo
+    // phones: three menus (the text, the paragraph, inserts) so the row fits the width; app.js closes them like its own
+    // popovers (outside, Esc, its dim). A menu's button shows what is on inside it: lit, or (mirror: a group) the icon of
+    // that group's tool in use, as the paragraph shows its alignment.
+    const drops = [];
+    const drop = (ic, label, { once = true, mirror = false } = {}) => {
+      const d = document.createElement('details'); d.className = 'pop-wrap tb-sheet';
+      const sum = document.createElement('summary'); sum.className = 'tb'; sum.title = label; sum.setAttribute('aria-label', label);
+      const caret = icon('caret-down'); caret.classList.add('tb-caret');
+      sum.append(icon(ic), caret);  // ▾: it opens a menu
+      const body = document.createElement('div'); body.className = 'pop'; body.setAttribute('role', 'group'); body.setAttribute('aria-label', label);
+      const h = document.createElement('h4'); h.className = 'tb-sheet-title'; h.textContent = label;
+      d.append(sum, body);
+      // a choice closes it (alignment, a list, an insert); the text's look stays open, to set more than one
+      if (once) body.addEventListener('click', (ev) => { const b = ev.target.closest('.tb'); if (b && !b.hasAttribute('aria-haspopup')) closeDrops(); });
+      const it = { d, body, sum, ic, mirror, fill: (...kids) => body.replaceChildren(h, ...kids) };
+      if (mirror) sum.classList.add('tb-mirror');
+      drops.push(it); return it;
+    };
+    function closeDrops() { for (const x of drops) if (actions.shutPop) actions.shutPop(x.d); else x.d.open = false; }
+    function syncDrops() {
+      for (const x of drops) {
+        const on = (x.mirror || x.body).querySelector('.tb.on');
+        if (x.mirror) x.sum.querySelector('use').setAttribute('href', (on ? on.querySelector('use') : null)?.getAttribute('href') || 'vendor/icons.svg#' + x.ic);
+        else x.sum.classList.toggle('on', !!on);
+      }
+    }
+    const dText = drop('text-aa', 'النص', { once: false }), dPara = drop('text-align-right', 'الفقرة', { mirror: align }),
+      dMore = drop('dots-three', 'إدراج والسطر');
+    const part = (name, ...kids) => {  // a named part of a menu
+      const s = document.createElement('div'); s.className = 'tb-sec';
+      const h = document.createElement('h5'); h.textContent = name; s.append(h, ...kids); return s;
+    };
+    const [boldB, italB, undB, strikeB, colorB, markB, eraserB] = [...fmt.children];
+    const fmtOwn = [boldB, italB, undB, strikeB, colorB, markB, eraserB];
+    const marks = group('tb-seg', dText.body), colors = group('tb-rows', dText.body);
+    const quick = document.createElement('div'); quick.className = 'tb-quick';
+
+    // wide: two rows that sit side by side when the pane is wide (the text's look, then the paragraph, inserts and
+    // undo); phones: the row and its sheet. The same buttons move between them, so their state stays one.
     const row = (...groups) => { const r = document.createElement('div'); r.className = 'tb-row'; r.append(...groups); return r; };
-    bar.replaceChildren(row(style, fmt), row(list, align, ins, again, hist));
+    let laidOut = null;
+    const arrange = () => {
+      const p = phone();
+      if (p === laidOut) return;
+      laidOut = p; closePop(); closeDrops();
+      if (p) {
+        marks.replaceChildren(boldB, italB, undB, strikeB); colors.replaceChildren(colorB, markB, eraserB);
+        dText.fill(part('نوع السطر والحجم', style), part('شكل الخط', marks), part('الألوان', colors));
+        dPara.fill(part('القوائم', list), part('المحاذاة والاتجاه', align));
+        ins.replaceChildren(...insOwn.filter((n) => n !== flagBtn)); again.replaceChildren(rereadBtn, eyeBtn); dMore.fill(ins, again);
+        quick.replaceChildren(flagBtn, undoBtn, redoBtn, dText.d, dPara.d, dMore.d);  // flags first: they are the review
+        bar.replaceChildren(quick);
+      } else {
+        fmt.replaceChildren(...fmtOwn); ins.replaceChildren(...insOwn); again.replaceChildren(rereadBtn, eyeBtn); hist.replaceChildren(undoBtn, redoBtn);
+        bar.replaceChildren(row(style, fmt), row(list, align, ins, again, hist));
+      }
+    };
+    arrange();
+    window.addEventListener('resize', arrange);
 
     // ---- the floating bar
     const float = document.createElement('div');
@@ -648,6 +714,7 @@
         if (it.on) { const on = !!(pe && it.on(pe)); it.node.setAttribute('aria-pressed', String(on)); it.node.classList.toggle('on', on); }
         if (it.value && pe) it.node.value = it.value(pe);
       }
+      syncDrops();
       const m = mode(pe);
       float.hidden = !m;
       if (m) place(pe, m);

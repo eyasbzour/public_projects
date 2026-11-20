@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import threading
+from importlib.util import find_spec
 
 from .common import EngineError, Line, fragments_to_lines
 
@@ -11,9 +12,7 @@ _lock = threading.Lock()
 
 
 def available() -> tuple[bool, str]:
-    try:
-        import easyocr  # noqa: F401
-    except Exception:
+    if not find_spec("easyocr"):  # looked up, not imported: listing the readers stays instant (it brings torch)
         return False, "EasyOCR غير مثبت على الخادم (pip install easyocr)"
     return True, ""
 

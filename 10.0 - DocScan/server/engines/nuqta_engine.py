@@ -13,6 +13,7 @@ from __future__ import annotations
 import math
 import os
 import threading
+from importlib.util import find_spec
 
 from .common import EngineError, Line, Word, fragments_to_lines
 
@@ -23,10 +24,7 @@ _lock = threading.Lock()
 
 
 def available() -> tuple[bool, str]:
-    try:
-        import torch  # noqa: F401
-        import transformers  # noqa: F401
-    except Exception:
+    if not (find_spec("torch") and find_spec("transformers")):  # looked up, not imported: listing the readers stays instant
         return False, "Nuqta غير مثبت على الخادم (pip install transformers accelerate)"
     return True, ""
 

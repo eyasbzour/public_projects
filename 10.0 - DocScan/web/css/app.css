@@ -7,6 +7,7 @@
   --surface: oklch(99.4% 0.002 255);   /* panes, controls, popovers */
   --canvas: oklch(93% 0.005 255);      /* the desk under the page */
   --sheet: oklch(99.7% 0.001 255);     /* the page itself */
+  --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 6l4.5 4.5L12.5 6' fill='none' stroke='%236b7079' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");  /* a list's arrow (as --muted) */
   --well: oklch(88% 0.004 255);        /* behind the photo */
   --raised: var(--surface);            /* the chosen segment of a segmented control */
   --line: oklch(90% 0.004 255);
@@ -46,6 +47,7 @@
   --surface: oklch(21.5% 0.004 255);
   --canvas: oklch(17.5% 0.004 255);
   --sheet: oklch(24.5% 0.004 255);
+  --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 6l4.5 4.5L12.5 6' fill='none' stroke='%23a8acb3' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --well: oklch(14% 0.004 255);
   --raised: oklch(38% 0.005 255);
   --line: oklch(32% 0.005 255);
@@ -127,6 +129,9 @@ input, select, textarea {
   border: 1px solid var(--line-strong); border-radius: var(--r-ctl); min-height: 2.25rem; padding: .35rem .6rem;
   transition: border-color .15s var(--ease);
 }
+/* lists look the same in every browser (Safari draws its own grey box): a field like the others, its arrow at the end */
+select:not([multiple]) { appearance: none; -webkit-appearance: none; padding-inline-end: 2rem;
+  background-image: var(--chev); background-repeat: no-repeat; background-position: left .6rem center; background-size: .9rem; }
 input:hover, select:hover, textarea:hover { border-color: color-mix(in oklch, var(--line-strong), var(--ink) 25%); }
 input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); box-shadow: 0 0 0 5px oklch(from var(--accent) l c h / .16); }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
@@ -171,7 +176,8 @@ input[type=file] { min-height: 0; padding: .3rem; }
 .flag-suggest { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin: .1rem .75rem .5rem; padding: .3rem .55rem;
   font-size: var(--fs-sm); background: var(--accent-soft); border-radius: var(--r-ctl); }
 /* fields never stick out of their panel: they take its width, a long template name is cut with "…" */
-.pop select, .pop input:not([type=checkbox]):not([type=radio]):not([type=color]) { width: 100%; min-width: 0; }
+/* a default (:where adds no weight), so a narrower field in a panel can say so */
+.pop select, .pop input:where(:not([type=checkbox], [type=radio], [type=color])) { width: 100%; min-width: 0; }
 .opts-pop { width: 20rem; gap: 0; padding: .35rem 1rem .9rem; }
 .pop-sec { display: grid; gap: .6rem; padding-block: .75rem; }
 .pop-sec + .pop-sec { border-top: 1px solid var(--line); }
@@ -182,10 +188,15 @@ input[type=file] { min-height: 0; padding: .3rem; }
 .count { color: var(--muted); font-weight: 600; font-size: var(--fs-sm); }
 
 /* ---------------------------------------------------------------- top bar */
-.update-bar { display: flex; align-items: center; gap: .6rem; padding: .45rem 1rem; font-size: var(--fs-sm);
+.update-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding: .45rem 1rem; font-size: var(--fs-sm);
   background: var(--accent-soft); color: var(--ink); border-bottom: 1px solid var(--accent-line); }
 .update-bar .i { color: var(--accent); }
-.update-bar span { flex: 1; }
+/* what's new opens under the bar, in the same band, so it reads as part of the offer */
+.update-notes { margin: 0; padding: .1rem 1rem .75rem; padding-inline-start: 2.75rem; display: grid; gap: .3rem;
+  max-height: 40dvh; overflow: auto; font-size: var(--fs-sm); background: var(--accent-soft); border-bottom: 1px solid var(--accent-line); }
+.update-notes li { max-width: 70ch; }
+.update-bar span { flex: 1 1 14rem; }  /* narrow: the buttons go under the text */
+.update-bar progress { width: 10rem; accent-color: var(--accent); }
 .topbar { height: var(--topbar-h); display: flex; align-items: center; gap: .75rem; padding: 0 1rem; background: var(--chrome); border-bottom: 1px solid var(--line); }
 body.in-draft .topbar { border-bottom-color: transparent; }  /* the title bar and the draft bar read as one toolbar */
 .brand { display: flex; gap: .65rem; align-items: center; font: inherit; font-weight: 600; color: var(--ink); background: none; border: 0; padding: .25rem; cursor: pointer; border-radius: var(--r-ctl); min-width: 0; }
@@ -264,11 +275,12 @@ body.in-draft .topbar { border-bottom-color: transparent; }  /* the title bar an
 .draftbar-start { flex: 1 1 18rem; }
 .draftbar-end { flex-wrap: wrap; }
 .name-input { flex: 1; min-width: 8rem; max-width: 26rem; font-size: var(--fs-md); font-weight: 700; border-color: transparent; background: transparent; }
+/* the box as wide as the name, so the save state reads as the name's own */
+@supports (field-sizing: content) { .name-input { flex: 0 1 auto; field-sizing: content; } }
 .name-input:hover { border-color: var(--line-strong); }
 .save-state { display: inline-flex; align-items: center; gap: .35rem; font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; }
-.save-state::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--ok); }
-.save-state.dirty { color: var(--warn); }
-.save-state.dirty::before { background: var(--warn); }
+/* quiet while autosave keeps up; colour only when a save failed (the reason is its title, Save tries again) */
+.save-state[data-state="failed"] { color: var(--warn); }
 
 .pane-tabs { display: none; }
 
@@ -378,7 +390,7 @@ body.resizing iframe, body.resizing img { pointer-events: none; }
 .zoom input { width: 6.5rem; min-width: 3.5rem; flex: 0 1 6.5rem; }
 .zoom output { min-width: 2.6rem; font-variant-numeric: tabular-nums; }
 .photo-label { flex: 1 1 9rem; text-align: end; font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.photo-frame { flex: 1; overflow: auto; padding: 1rem; background: var(--well); }
+.photo-frame { flex: 1; overflow: auto; padding: 1rem; background: var(--well); position: relative; touch-action: pan-x pan-y; }  /* pinch: app.js initPhotoPinch */
 .photo-empty { margin: auto; max-width: 22rem; display: grid; justify-items: center; gap: .75rem; padding: 2rem 1.5rem; text-align: center;
   color: var(--ink); background: var(--surface); border: 1.5px dashed var(--line-strong); border-radius: var(--r-panel); }
 .photo-empty p { margin: 0; color: var(--muted); font-size: var(--fs-sm); line-height: 1.8; }
@@ -388,6 +400,13 @@ body.resizing iframe, body.resizing img { pointer-events: none; }
 .photo-frame.panning { cursor: grabbing; user-select: none; }
 .photo-frame img { display: block; margin: 0 auto; transform-origin: center center; max-width: none; box-shadow: var(--shadow-page); }
 .photo-frame img:not([src]) { display: none; }
+/* picking a part of the photo: touch draws instead of scrolling; outside the part is dimmed like a dialog's backdrop */
+.photo-frame.selecting, .photo-frame.selecting img { cursor: crosshair; touch-action: none; user-select: none; }
+.sel-box { position: absolute; z-index: 2; border: 2px solid var(--accent); box-shadow: 0 0 0 100vmax oklch(18% 0.01 255 / .3); cursor: move; }
+/* above the box, at its right edge (placeSel keeps it inside the visible pane) */
+.sel-bar { position: absolute; display: flex; gap: .25rem; padding: .25rem; white-space: nowrap; cursor: default;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: var(--shadow-2); }
+.sel-box.moving .sel-bar { display: none; }
 
 /* text pane */
 .read-bar .read-state { font-size: var(--fs-xs); display: inline-flex; align-items: center; gap: .3rem; }
@@ -495,14 +514,43 @@ dialog::backdrop { background: oklch(18% 0.01 255 / .3); }
 .dlg-head h2 { font-size: var(--fs-lg); }
 fieldset { border: 0; border-top: 1px solid var(--line); margin: 0; padding: 1rem 0 0; display: grid; gap: .8rem; }
 legend { font-weight: 700; padding: 0 .5rem 0 0; font-size: var(--fs-base); }
+fieldset > .btn { justify-self: start; }  /* a rare action, not a field: its own width */
+/* a status and its action on one line (Settings), wrapping on narrow screens */
+.set-row { display: flex; align-items: center; gap: .5rem 1rem; flex-wrap: wrap; }
+.set-row > p { flex: 1 1 14rem; }
+.credit a { color: var(--accent); text-underline-offset: 3px; }
+/* use on phone: the QR beside its two steps, stacked when narrow; the QR stays dark on light for cameras */
+.phone-text { display: grid; gap: .6rem; }
+.phone-text p, .phone-error { margin: 0; }
+.phone-error { color: var(--danger); }
+.phone-on { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }
+.phone-on .qr { flex: none; line-height: 0; border-radius: var(--r-ctl); overflow: hidden; }
+.phone-steps { flex: 1 1 15rem; margin: 0; padding-inline-start: 1.2rem; display: grid; gap: 1rem; font-size: var(--fs-sm); }
+.copy-row { display: flex; align-items: center; gap: .5rem; margin-top: .4rem; }
+.copy-row code { flex: 1; min-width: 0; overflow-wrap: anywhere; padding: .35rem .55rem; border-radius: var(--r-ctl);
+  background: var(--sunken); font: var(--fs-sm)/1.45 ui-monospace, Consolas, monospace; user-select: all; }
+.copy-row code.pw { font-size: 1.35rem; letter-spacing: .15em; text-align: center; }
+/* the link is open: the button says so, and the dot is that state, not decoration */
+#btnPhone.live { color: var(--accent); }
+#btnPhone.live::after { content: ""; width: .45rem; height: .45rem; border-radius: 50%; background: var(--ok); }
 .dlg-actions { display: flex; gap: .5rem; padding-top: .25rem; }
 .dlg > .dlg-actions { position: sticky; bottom: -1.5rem; margin: 0 -1.5rem -1.5rem; padding: .75rem 1.5rem; background: var(--surface); border-top: 1px solid var(--line); }
 .ask-dlg .dlg > .dlg-actions { position: static; margin: 0; padding: .25rem 0 0; border: 0; }
+/* a long dialog: only its middle scrolls, so the title (with its close), the buttons and the scrollbar's own
+   track stay between them */
+.dlg.scrolls { display: flex; flex-direction: column; gap: 0; padding: 0; overflow: hidden; }
+.dlg.scrolls > .dlg-head { padding: 1rem 1.5rem .75rem; border-bottom: 1px solid var(--line); }
+.dlg.scrolls > .dlg-body { flex: 1; min-height: 0; overflow: auto; display: grid; gap: 1.1rem; padding: 1.1rem 1.5rem 1.25rem; }
+.dlg.scrolls > .dlg-actions { position: static; margin: 0; padding: .75rem 1.5rem; border-top: 1px solid var(--line); }
 .ask-dlg { width: min(26rem, 92vw); }
 .ask-dlg .dlg { padding: 1.4rem 1.5rem 1.25rem; gap: 1.25rem; }
 .ask-text { margin: 0; font-size: var(--fs-base); line-height: 1.75; }
-.tpl-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; }
-.tpl-list li { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .3rem .5rem; border-radius: var(--r-ctl); font-size: var(--fs-sm); background: var(--sunken); }
+/* a plain list, one hairline between rows: ten templates read as a list, not ten cards */
+.tpl-list { list-style: none; padding: 0; margin: 0; }
+.tpl-list li { display: flex; justify-content: space-between; align-items: center; gap: .5rem; min-height: 2.4rem; font-size: var(--fs-sm); }
+.tpl-list li + li { border-top: 1px solid var(--line); }
+.tpl-list .builtin { color: var(--muted); font-size: var(--fs-xs); padding-inline: .65rem; }
+.tpl-list .danger:not(:hover):not(:focus-visible) { color: var(--muted); }  /* red only when it is about to act */
 
 .note-pop { position: fixed; z-index: 50; width: min(22rem, 92vw); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel); padding: .85rem; box-shadow: var(--shadow-2); display: grid; gap: .55rem; animation: pop-in .16s var(--ease); }
 .note-actions { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
@@ -547,13 +595,11 @@ legend { font-weight: 700; padding: 0 .5rem 0 0; font-size: var(--fs-base); }
 @media (max-width: 899px) {
   .topbar { padding: 0 .6rem; }
   .brand-name { font-size: var(--fs-sm); }
-  #btnSettings span { display: none; }
   .draftbar { padding: .45rem .6rem; }
   .draftbar-end { width: 100%; }
-  .draftbar-end #btnQuick span, .draftbar-end #btnSave span, #outPop summary span { display: none; }
-  .draftbar-end .inline-field { flex: 1; }
-  .draftbar-end .inline-field select { width: 100%; }
-  .draftbar-end #btnExport { flex: 1 1 100%; }
+  /* icon only: the label is hidden from sight (as .sr-only) but still names the button for screen readers */
+  #btnSettings span, #btnPhone span, #saveState span, .draftbar-end #btnQuick span, .draftbar-end #btnSave span, #outPop summary span {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .pane-tabs { display: block; padding: .4rem .6rem .5rem; background: var(--chrome); border-bottom: 1px solid var(--line); }
   .pane-tabs .seg { display: flex; }
   .pane-tabs button { flex: 1; min-height: 2.5rem; font: inherit; font-size: var(--fs-sm); font-weight: 600; color: var(--muted); background: none; border: 0; border-radius: var(--r-ctl); cursor: pointer; }
@@ -563,8 +609,6 @@ legend { font-weight: 700; padding: 0 .5rem 0 0; font-size: var(--fs-base); }
   .workspace[data-pane="pages"] > .pages, .workspace[data-pane="photo"] > .photo, .workspace[data-pane="text"] > .editor-pane { display: flex; }
   .page-list { grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); }
   .page-actions { opacity: 1; }
-  .fmt-bar, .tb-row { flex-wrap: nowrap; }
-  .fmt-bar { overflow-x: auto; scrollbar-width: thin; }
   body.in-draft .topbar { display: none; }  /* in a draft the back arrow is enough; more room for the letter */
   body.in-draft .view { height: 100dvh; }
   .editor-scroll { padding: .75rem .5rem 2rem; }
@@ -588,7 +632,116 @@ legend { font-weight: 700; padding: 0 .5rem 0 0; font-size: var(--fs-base); }
 @media (pointer: coarse) {
   /* a floor, so no tighter rule for one toolbar takes a target below it */
   :is(.btn, .tb, select, input:not([type=checkbox]):not([type=radio]):not([type=range]), .pane-tabs button, .flags > summary, .brand) { min-height: 44px !important; }
+  .credit a { display: inline-flex; align-items: center; min-height: 44px; }
   :is(.btn.icon-only, .tb) { min-width: 44px !important; }
   .page-actions { position: static; opacity: 1; max-width: none; margin-top: .4rem; box-shadow: none; justify-content: center; }
   .page-actions button { width: 44px; height: 44px; }
 }
+
+/* ---------------------------------------------------------------- phones: sheets, and a toolbar in thumb reach
+   The app's own popups (the options, reading, versions, a column's search, a flagged word, a line, the toolbar's
+   panels) and every list of three or more choices come up from the bottom, full width, over a dimmed page; a tap on
+   the dim closes them without reaching what is under it. --phone-ui tells app.js and editor.js that they are sheets
+   (its own name: --sheet is the page's colour).
+   The same width as one pane at a time (above), so a narrow window or a phone on its side looks like a phone too. */
+@media (max-width: 899px) {
+  :root { --phone-ui: 1; --sheet-ease: cubic-bezier(.32, .72, 0, 1); }  /* a drawer's curve: an even start, a long glide in */
+  /* type: nothing under 14px on a phone, and what is typed into at 16px, below which iPhone zooms the page in on a tap */
+  :root { --fs-xs: .875rem; --fs-sm: .9375rem; --fs-base: 1rem; --fs-md: 1.125rem; }
+  :is(input:not([type=checkbox], [type=radio], [type=range], [type=color]), select, textarea, [contenteditable]) { font-size: max(1rem, 16px) !important; }
+  .pop, .note-pop, .tb-pop, .sel-sheet, body.read-open .read-bar {
+    position: fixed; z-index: 50; inset: auto 0 0 0; width: auto; max-width: 40rem; margin-inline: auto; max-height: 85dvh; overflow: auto;
+    padding: 1.1rem 1rem calc(1.1rem + env(safe-area-inset-bottom)); background: var(--surface); color: var(--ink);
+    border: 1px solid var(--line); border-width: 1px 0 0; border-radius: var(--r-panel) var(--r-panel) 0 0; box-shadow: var(--shadow-2);
+    animation: sheet-up .42s var(--sheet-ease); }
+  body.read-open .read-bar { z-index: 48; }  /* its own options and versions open over it */
+  .tb-pop { z-index: 55; justify-items: center; }  /* the colour and table panels, over the sheet they came from */
+  .sel-sheet { z-index: 58; }  /* a list, over the sheet it is in */
+  .sheet-out { animation: sheet-down .28s var(--sheet-ease) forwards !important; }  /* app.js slideOut, then hidden */
+  body:is(.read-open, :has(details.pop-wrap[open], #notePop:not(.hidden), #linePop:not(.hidden), #colFilter:not(.hidden), #selSheet:not(.hidden)))::after {
+    content: ""; position: fixed; inset: 0; z-index: 45; background: oklch(18% 0.01 255 / .3); animation: dim-in .42s var(--sheet-ease); }
+  body:has(.sheet-out)::after { animation: dim-out .28s var(--sheet-ease) forwards; }
+
+  /* the header: one row (save as an icon beside the options); the format and "read all and produce" in the options sheet */
+  .draftbar { flex-wrap: nowrap; gap: .4rem; }
+  .draftbar-start { flex: 1 1 auto; }
+  .draftbar-end { width: auto; flex: none; flex-wrap: nowrap; gap: .3rem; }
+  .draftbar-start { min-width: 0; gap: .35rem; }
+  /* the name takes the room that is left and ends in "…"; it does not grow to its text here */
+  .draftbar .name-input { field-sizing: fixed; flex: 1 1 0; width: 0; min-width: 0; max-width: none; padding-inline: .3rem;
+    font-size: var(--fs-base); text-overflow: ellipsis; }
+  .draftbar .save-state { flex: none; padding-inline: .15rem; }
+  /* "إنتاج" on the button; its full name stays for screen readers */
+  #btnExport span[data-short] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #btnExport::after { content: "إنتاج"; }
+  .phone-slot:empty { display: none; }
+  .phone-doc { display: grid; gap: .6rem; padding-bottom: .9rem; border-bottom: 1px solid var(--line); }
+  .phone-doc > .inline-field { order: 1; flex-direction: column; align-items: stretch; gap: .35rem; font-weight: 600; color: var(--ink); }
+  .phone-doc > .inline-field .sr-only { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
+  .phone-doc > #btnQuick { order: 2; }
+  .phone-doc > .btn { width: 100%; }
+  .phone-doc > #btnQuick span { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }  /* names shown again in the sheet */
+
+  /* reading: the bar is a sheet; read first, then the reader and its options, the versions, the rest */
+  .read-bar { display: none; }
+  body.read-open .read-bar { display: flex; flex-direction: column; align-items: stretch; gap: .75rem; min-height: 0; }
+  .read-bar #btnRead { order: -1; }
+  .read-bar .inline-field { flex-direction: column; align-items: stretch; gap: .35rem; font-weight: 600; color: var(--ink); }
+  .read-bar .pop-wrap > summary { width: 100%; justify-content: flex-start; }
+  .read-bar .read-state:empty { display: none; }
+
+  /* the text toolbar: one row at the bottom (in thumb reach, right above the keyboard while typing) that fits the
+     width: القراءة, the flag, undo, redo, then three menus for the text, the paragraph and inserts (editor.js arrange) */
+  .editor-pane > .editor-scroll { order: 1; }
+  .editor-pane > .flags { order: 2; }
+  .editor-pane > .edit-bar { order: 3; border-top: 1px solid var(--line); border-bottom: 0; padding: .2rem .25rem calc(.2rem + env(safe-area-inset-bottom)); }
+  .edit-bar { align-items: center; gap: 0; }
+  .edit-bar > .tb-lead { flex: none; display: inline-flex; border-inline-end: 1px solid var(--line); border-radius: 0; }
+  .edit-bar > .fmt-bar { flex: 1 1 0; gap: 0; min-width: 0; }
+  .tb-quick { display: flex; width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }  /* scrolls only when zoomed far in */
+  .tb-quick::-webkit-scrollbar { display: none; }
+  .tb-quick > .tb, .tb-quick > .tb-sheet { flex: 1 0 44px; }
+  :is(.edit-bar > .tb-lead, .tb-quick > .tb, .tb-quick > .tb-sheet > summary) { width: 100%; min-width: 44px; height: 48px; justify-content: center;
+    padding: 0 .5rem; gap: 0; font-size: 0; }
+  :is(.edit-bar > .tb-lead, .tb-quick > .tb, .tb-quick > .tb-sheet > summary) .i { width: 1.35rem; height: 1.35rem; }
+  .edit-bar > .tb-lead.tb { width: 52px; }  /* over the :is() rule above, whose summary branch weighs more */
+  .tb-quick > .tb-sheet { flex: 1 1 52px; }
+  .tb-quick { justify-content: center; }
+  .tb-quick > :is(.tb, .tb-sheet) { max-width: 4.5rem; }  /* wider screens: a row of buttons, not stretched tiles */
+  .tb-quick > .tb-sheet > summary { gap: 1px; padding-inline: .2rem; }
+  .tb-quick .tb-caret { width: .7rem; height: .7rem; opacity: .7; }
+  .tb-quick > .tb-sheet[open] > summary { background: var(--accent-soft); color: var(--accent); }
+  .tb-lead[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
+  .tb-lead.unread { color: var(--accent); }  /* nothing read yet: the next step */
+  .tb-lead.busy .i { animation: reading 1.2s ease-in-out infinite; }  /* a page is being read */
+  /* a menu: its name, then its tools at full touch size; toggles side by side, the rest one per row with its name */
+  .tb-sheet .pop { display: grid; gap: .9rem; }
+  .tb-sheet-title { margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
+  .tb-sec { display: grid; gap: .4rem; }
+  .tb-sec > h5 { margin: 0; font-size: var(--fs-xs); font-weight: 600; color: var(--muted); }
+  .tb-sheet .tb-group { border: 0; padding: 0; gap: 4px; }
+  .tb-sheet .tb { flex: 1 1 0; min-width: 44px; height: 52px; justify-content: center; }
+  .tb-sheet .tb .i { width: 1.4rem; height: 1.4rem; }
+  .tb-sheet .tb-group :is(select, .tb-size) { flex: 1 1 50%; width: auto; box-sizing: border-box; min-width: 0; min-height: 48px; }  /* line type and size: equal halves */
+  .tb-sheet :is(.tb-rows, .tb-group:has(.tb-text)) { flex-direction: column; align-items: stretch; }
+  .tb-sheet :is(.tb-rows .tb, .tb-group:has(.tb-text) .tb) { flex: none; justify-content: flex-start; gap: .75rem; padding-inline: .75rem; font-size: var(--fs-base); }
+  .tb-sheet :is(.tb-rows .tb, .tb-eye)::after { content: attr(aria-label); font-size: var(--fs-base); }
+  .tb-sheet .tb-eye[aria-pressed="true"]::after { content: attr(aria-label) " (مفعّلة)"; }
+
+  /* a list as a sheet: its name, then one row per choice; the chosen one ticked */
+  .sel-title { margin: 0 0 .6rem; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+  .sel-list { display: grid; gap: 2px; }
+  .sel-group { margin: .6rem 0 .2rem; font-size: var(--fs-xs); color: var(--muted); font-weight: 600; }
+  .sel-opt { display: flex; align-items: center; gap: .6rem; min-height: 48px; padding: .5rem .75rem; text-align: start; font: inherit;
+    font-size: var(--fs-base); color: var(--ink); background: none; border: 0; border-radius: var(--r-ctl); cursor: pointer; }
+  .sel-opt[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .sel-opt[aria-selected="true"]::after { content: "✓"; margin-inline-start: auto; }
+  .sel-opt:disabled { color: var(--muted); cursor: default; }
+}
+.tb-lead { display: none; }  /* phones only */
+.sel-sheet.hidden { display: none; }
+@keyframes sheet-up { from { transform: translateY(100%); } }
+@keyframes sheet-down { to { transform: translateY(100%); } }
+@keyframes dim-in { from { opacity: 0; } }
+@keyframes dim-out { to { opacity: 0; } }
+@keyframes reading { 50% { opacity: .35; } }

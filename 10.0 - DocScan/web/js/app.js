@@ -101,20 +101,78 @@
 
   // ------------------------------------------------------------------ boot
   // the Windows program checks GitHub for a newer version at start (server/updater.py); a quiet bar offers it
+  let appVersion;  // the Windows program's version; null on a server (no updates there), undefined until asked
   async function checkUpdate(tries = 4) {
     let st;
     try { st = await api('/api/update'); } catch (e) { return; }  // offline or an older server: nothing to show
+    appVersion = st.current;
     if (!st.checked && tries > 0) { setTimeout(() => checkUpdate(tries - 1), 4000); return; }
-    if (!st.update || store.get('skipUpdate') === st.update.version) return;
-    $('updateText').textContent = `يتوفر إصدار جديد من البرنامج (${st.update.version}).`;
+    if (st.update && store.get('skipUpdate') !== st.update.version) showUpdate(st.update);
+  }
+  function showUpdate(u) {
+    $('updateText').textContent = `يتوفر إصدار جديد من البرنامج (${u.version}).`;
     $('updateBar').classList.remove('hidden');
-    $('updateLater').onclick = () => { $('updateBar').classList.add('hidden'); store.set('skipUpdate', st.update.version); };
+    // the tag's message, one change per line ("- " or "* " in front is dropped); shown as text, never as HTML
+    const lines = (u.notes || '').split('\n').map((l) => l.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean);
+    $('updateNotes').replaceChildren(...lines.map((l) => el('li', null, l)));
+    const notesBtn = $('updateNotesBtn'), openNotes = (open) => {
+      $('updateNotes').classList.toggle('hidden', !open); notesBtn.setAttribute('aria-expanded', open);
+      notesBtn.textContent = open ? 'إخفاء التفاصيل' : 'ما الجديد؟';
+    };
+    notesBtn.classList.toggle('hidden', !lines.length); openNotes(false);
+    notesBtn.onclick = () => openNotes(notesBtn.getAttribute('aria-expanded') !== 'true');
+    $('updateLater').onclick = () => { $('updateBar').classList.add('hidden'); openNotes(false); store.set('skipUpdate', u.version); };
     $('btnUpdate').onclick = async () => {
-      if (!(await ask(`سيُنزَّل الإصدار ${st.update.version} ويُثبَّت، ثم يُفتح البرنامج من جديد. يُحفظ عملك أولاً.`, { ok: 'تحديث' }))) return;
+      if (!(await ask(`سيُنزَّل الإصدار ${u.version} ويُثبَّت، ثم يُفتح البرنامج من جديد. يُحفظ عملك أولاً.`, { ok: 'تحديث' }))) return;
       if (draft && dirty) await saveDraft();
       $('btnUpdate').disabled = true; $('updateText').textContent = 'جارٍ تنزيل التحديث… سيُغلق البرنامج ويُفتح من جديد.';
       try { await api('/api/update/install', { method: 'POST' }); } catch (e) { toast(e.message, true); $('btnUpdate').disabled = false; }
     };
+  }
+  // use on phone (the Windows program, on the PC; server/remote.py): the top bar's button shows while the link is open
+  let phoneTimer = null;
+  async function checkPhone() {
+    try { showPhone(await api('/api/remote')); $('btnPhone').classList.remove('hidden'); }
+    catch (e) { /* a server, or the phone itself: no button */ }
+  }
+  async function refreshPhone() {
+    try { showPhone(await api('/api/remote')); } catch (e) { /* the program is closing */ }
+  }
+  async function phoneAction(path) {
+    try { showPhone(await api(path, { method: 'POST' })); } catch (e) { toast(e.message, true); }
+  }
+  function showPhone(st) {
+    const on = st.state === 'on', busy = st.state === 'starting', show = (id, yes) => $(id).classList.toggle('hidden', !yes);
+    $('btnPhone').classList.toggle('live', on);
+    $('btnPhone').querySelector('span').textContent = on ? 'على الهاتف: يعمل' : 'على الهاتف';
+    show('phoneOff', !on && !busy); show('phoneBusy', busy); show('phoneOn', on);
+    show('phoneError', st.state === 'error'); $('phoneError').textContent = st.error || '';
+    show('phoneStart', !on && !busy); $('phoneStart').textContent = st.state === 'error' ? 'إعادة المحاولة' : 'تشغيل';
+    show('phoneStop', on || busy);
+    if (on) { $('phoneQr').innerHTML = st.qr; $('phoneUrl').textContent = st.url; $('phonePw').textContent = st.shown; }
+    clearTimeout(phoneTimer);  // quick while it starts; now and then while open, so the button stays true
+    if (busy || on) phoneTimer = setTimeout(refreshPhone, busy ? 1000 : 15000);
+  }
+  function copyText(id) {
+    navigator.clipboard.writeText($(id).textContent).then(() => toast('نُسخ.'), () => toast('تعذر النسخ.', true));
+  }
+
+  // Settings > Updates: asked for, so a version put off with "later" is offered again
+  async function checkUpdateNow() {
+    const btn = $('btnCheckUpdate');
+    btn.disabled = true; $('updateInfo').textContent = 'جارٍ التحقق…';
+    try {
+      const st = await api('/api/update/check', { method: 'POST' });
+      if (st.update) {
+        $('updateInfo').textContent = `يتوفر الإصدار ${st.update.version}.`;
+        showUpdate(st.update);
+        $('checkUpdateLabel').textContent = 'تحديث الآن';
+        btn.onclick = () => { $('dlgSettings').close(); $('btnUpdate').click(); };
+      } else {
+        $('updateInfo').textContent = `الإصدار ${st.current}، وهو أحدث إصدار.`;
+      }
+    } catch (e) { $('updateInfo').textContent = e.message; }
+    btn.disabled = false;
   }
 
   async function boot() {
@@ -130,6 +188,8 @@
     $('newOwner').value = settings.author;
     route();
     setTimeout(() => checkUpdate(), 2500);
+    watchParts(true);  // a download still running after a reload, or a restart it is waiting for
+    checkPhone();
     window.addEventListener('hashchange', route);
   }
 
@@ -237,6 +297,95 @@
   function setDraftFilter(k, v) { draftFilter[k] = v.trim(); renderDraftList(); }
   function clearDraftFilters() { for (const k in draftFilter) draftFilter[k] = ''; closeColFilter(false); renderDraftList(); }
 
+  // phones show the popups as bottom sheets (app.css, --phone-ui): then they are not placed beside what opened them
+  const sheets = () => getComputedStyle(document.documentElement).getPropertyValue('--phone-ui').trim() === '1';
+  // a sheet slides away before it goes (app.css .sheet-out), unless motion is turned down; done() then hides it.
+  // Showing it again meanwhile (slideIn) keeps it.
+  const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function slideOut(node, done) {
+    clearTimeout(node.slideTimer);
+    if (!sheets() || calm() || !node.isConnected) { node.classList.remove('sheet-out'); done(); return; }
+    node.classList.add('sheet-out');
+    node.slideTimer = setTimeout(() => { node.classList.remove('sheet-out'); done(); }, 280);
+  }
+  function slideIn(node) { clearTimeout(node.slideTimer); node.classList.remove('sheet-out'); }
+  const shutPop = (d) => { if (d.open) slideOut(d.querySelector(':scope > .pop') || d, () => { d.open = false; }); };
+
+  // phones: the reading bar is a sheet, opened from the toolbar's القراءة
+  function setReadSheet(on) {
+    const bar = $('readBar'), open = document.body.classList.contains('read-open');
+    if (on && !open) { slideIn(bar); document.body.classList.add('read-open'); $('btnReadSheet').setAttribute('aria-expanded', 'true'); }
+    else if (!on && open) slideOut(bar, () => { document.body.classList.remove('read-open'); $('btnReadSheet').setAttribute('aria-expanded', 'false'); });
+  }
+
+  // phones: a list of three or more choices opens as a sheet; two stay the phone's own control (a toggle, really)
+  let selFor = null;
+  const sheetSelect = (t) => {
+    const s = t && t.closest && t.closest('select');
+    return s && sheets() && !s.disabled && !s.multiple && s.options.length > 2 ? s : null;
+  };
+  function selName(s) {
+    if (s.getAttribute('aria-label')) return s.getAttribute('aria-label');
+    const by = s.getAttribute('aria-labelledby'); if (by && $(by)) return $(by).textContent.trim();
+    const l = s.closest('label'); if (l) return [...l.childNodes].filter((n) => n.nodeType === 3).map((n) => n.data).join(' ').trim();
+    return s.title || '';
+  }
+  function openSelSheet(s) {
+    selFor = s;
+    const list = $('selList'), opts = [];
+    const add = (o) => {
+      const b = el('button', { type: 'button', class: 'sel-opt', role: 'option', 'aria-selected': String(o.selected), disabled: o.disabled, title: o.title || null,
+        onclick: () => pickSel(o.value) }, o.textContent);
+      opts.push(b); return b;
+    };
+    list.replaceChildren(...[...s.children].flatMap((n) => n.tagName === 'OPTGROUP'
+      ? [el('div', { class: 'sel-group', role: 'presentation' }, n.label), ...[...n.children].map(add)] : [add(n)]));
+    $('selTitle').textContent = selName(s);
+    slideIn($('selSheet')); $('selSheet').classList.remove('hidden');
+    (opts.find((b) => b.getAttribute('aria-selected') === 'true') || opts[0]).focus({ preventScroll: false });
+  }
+  function closeSelSheet(refocus) {
+    const s = selFor; if (!s) return;
+    selFor = null;
+    slideOut($('selSheet'), () => $('selSheet').classList.add('hidden'));
+    if (refocus) s.focus({ preventScroll: true });
+  }
+  function pickSel(v) {
+    const s = selFor; closeSelSheet(false);
+    if (s.value !== v) { s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); }
+  }
+  function initSelSheets() {
+    let touch = null;
+    // the phone's own list opens on the tap: the press is taken here, and the sheet opens when the finger lifts in place
+    document.addEventListener('touchstart', (e) => {
+      const s = sheetSelect(e.target); if (!s) return;
+      e.preventDefault(); touch = { s, x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }, { capture: true, passive: false });
+    document.addEventListener('touchend', (e) => {
+      const t = touch; touch = null; if (!t) return;
+      const p = e.changedTouches[0];
+      if (Math.abs(p.clientX - t.x) < 10 && Math.abs(p.clientY - t.y) < 10) openSelSheet(t.s);
+    }, true);
+    document.addEventListener('mousedown', (e) => { const s = sheetSelect(e.target); if (s) { e.preventDefault(); openSelSheet(s); } }, true);
+    document.addEventListener('keydown', (e) => {
+      const s = sheetSelect(e.target);
+      if (s && (e.key === ' ' || e.key === 'Enter' || (e.altKey && e.key === 'ArrowDown'))) { e.preventDefault(); openSelSheet(s); }
+    }, true);
+  }
+  // phones: a few bar controls live in a sheet (data-phone-in = the slot's id), and come back on wider screens
+  function placeForPhone() {
+    const phone = sheets();
+    document.querySelectorAll('[data-phone-in]').forEach((el) => {
+      if (!el.phoneHome) { el.phoneHome = document.createComment(' ' + el.dataset.phoneIn + ' '); el.before(el.phoneHome); }
+      if (phone) { if (el.parentElement.id !== el.dataset.phoneIn) $(el.dataset.phoneIn).append(el); }
+      else if (el.phoneHome.nextSibling !== el) el.phoneHome.after(el);
+    });
+  }
+  function asSheet(pop) {
+    if (!sheets()) return false;
+    pop.style.top = pop.style.left = pop.style.right = '';
+    return true;
+  }
   let colFilterFor = null;  // which column's search panel is open
   function openColFilter(k) {
     closeColFilter(false);
@@ -244,11 +393,13 @@
     colFilterFor = k;
     pop.dataset.col = k;
     for (const inp of pop.querySelectorAll('input')) inp.value = draftFilter[inp.dataset.col];
-    pop.classList.remove('hidden');
+    slideIn(pop); pop.classList.remove('hidden');
     // under the header, its right edge on the header's (the page is right to left), kept inside the list
-    const area = pop.offsetParent.getBoundingClientRect(), r = th.getBoundingClientRect();
-    pop.style.top = (r.bottom - area.top + 4) + 'px';
-    pop.style.right = Math.max(0, Math.min(area.right - r.right, area.width - pop.offsetWidth)) + 'px';
+    if (!asSheet(pop)) {
+      const area = pop.offsetParent.getBoundingClientRect(), r = th.getBoundingClientRect();
+      pop.style.top = (r.bottom - area.top + 4) + 'px';
+      pop.style.right = Math.max(0, Math.min(area.right - r.right, area.width - pop.offsetWidth)) + 'px';
+    }
     th.querySelector('.filt').setAttribute('aria-expanded', 'true');
     pop.querySelector(`input[data-col="${k}"]`).focus();
   }
@@ -256,7 +407,7 @@
     if (!colFilterFor) return;
     const b = $('draftList').querySelector(`th[data-k="${colFilterFor}"] .filt`);
     colFilterFor = null;
-    $('colFilter').classList.add('hidden');
+    slideOut($('colFilter'), () => $('colFilter').classList.add('hidden'));
     if (b) { b.setAttribute('aria-expanded', 'false'); if (refocus) b.focus(); }
   }
 
@@ -302,7 +453,7 @@
     $('draftDate').value = draft.date || todayISO();
     if (!draft.template && TEMPLATES[0]) draft.template = TEMPLATES[0].id;
     $('templateSel').value = draft.template || '';
-    setSaveState();
+    saveError = ''; setSaveState();
     renderPages(); showPage(0);
     setPane(draft.pages.length ? 'text' : 'pages');
   }
@@ -319,10 +470,15 @@
     dirty = true; setSaveState();
     clearTimeout(saveTimer); saveTimer = setTimeout(saveDraft, 4000);
   }
-  function setSaveState(text) {
+  let saveError = '';  // why the last save failed; cleared by the next one that works
+  function setSaveState() {
     const s = $('saveState');
-    s.textContent = text || (saving ? 'جارٍ الحفظ…' : dirty ? 'تغييرات غير محفوظة' : 'محفوظ');
-    s.classList.toggle('dirty', dirty);
+    const [state, icon, text] = saving ? ['busy', 'circle-dashed', 'جارٍ الحفظ…'] : saveError ? ['failed', 'warning-circle', 'لم يُحفظ']
+      : dirty ? ['busy', 'circle-dashed', 'لم يُحفظ بعد'] : ['saved', 'check-circle', 'محفوظ'];
+    s.dataset.state = state;
+    s.querySelector('use').setAttribute('href', 'vendor/icons.svg#' + icon);
+    s.querySelector('span').textContent = text;
+    s.title = saveError ? saveError + '. اضغط "حفظ" للمحاولة من جديد.' : '';
   }
 
   async function saveDraft() {
@@ -332,8 +488,9 @@
     saving = true; setSaveState();
     try {
       const r = await api('/api/drafts/' + draft.id, jsonOpts('PUT', draft));
-      draft.version = r.version; draft.updated = r.updated; dirty = false;
+      draft.version = r.version; draft.updated = r.updated; dirty = false; saveError = '';
     } catch (e) {
+      saveError = e.status === 409 ? 'عدّل شخص آخر هذه المسودة في نفس الوقت' : 'تعذر الحفظ: ' + e.message;
       if (e.status === 409) toast('عدّل شخص آخر هذه المسودة في نفس الوقت. انسخ تعديلاتك ثم أعد فتحها.', true);
       else toast('تعذر الحفظ: ' + e.message, true);
     } finally { saving = false; setSaveState(); }
@@ -519,7 +676,7 @@
       const h = img.naturalHeight * base * z, w = img.naturalWidth * base * z;
       img.style.margin = rot % 180 ? `${(w - h) / 2}px auto` : '0 auto';
     };
-    const fitted = () => { fit(); frame.classList.toggle('can-pan', frame.scrollWidth > frame.clientWidth + 1 || frame.scrollHeight > frame.clientHeight + 1); };
+    const fitted = () => { fit(); frame.classList.toggle('can-pan', frame.scrollWidth > frame.clientWidth + 1 || frame.scrollHeight > frame.clientHeight + 1); placeSel(); };
     if (img.complete && img.naturalWidth) fitted(); else img.onload = fitted;
   }
 
@@ -530,8 +687,8 @@
     const sel = $('engineSel');
     const groups = { free: el('optgroup', { label: 'مجاني (على الخادم)' }), ai: el('optgroup', { label: 'ذكاء اصطناعي (يحتاج مفتاحاً)' }) };
     for (const e of ENGINES) {
-      groups[e.group].append(el('option', { value: e.id, disabled: !e.available, title: e.reason || '' },
-        e.label + (e.available ? '' : ' (غير متاح)')));
+      groups[e.group].append(el('option', { value: e.id, disabled: !e.available && !e.installable, title: e.reason || '' },
+        e.label + (e.available ? '' : e.installable ? ' (يحتاج تنزيلاً)' : ' (غير متاح)')));
     }
     sel.replaceChildren(groups.free, groups.ai);
     const saved = store.get('engine');
@@ -551,6 +708,62 @@
     // every reader has the page direction now; Tesseract also its clean-up and language
   }
   const engineLabel = (id) => (ENGINES.find((e) => e.id === id) || {}).label || id;
+
+  // the Windows program: Nuqta and EasyOCR come as one download (server/parts.py); picking either offers it
+  let partsWanted = null;  // the reader to switch to once they are in
+  async function offerParts(engineId) {
+    if (!(await ask('يُنزَّل قارئا Nuqta و EasyOCR معاً، نحو 2 جيجابايت، ويعملان فور انتهاء التنزيل. يمكنك متابعة العمل في أثناء ذلك.', { ok: 'تنزيل' }))) return;
+    partsWanted = engineId;
+    startParts();
+  }
+  async function startParts() {
+    try { await api('/api/parts/install', { method: 'POST' }); } catch (e) { toast(e.message, true); return; }
+    watchParts();
+  }
+  // every second while it runs; atStart: a download begun before the page was reloaded, nothing to announce otherwise
+  let partsBusy = false;  // downloading or unpacking: Settings says so instead of offering it again
+  async function watchParts(atStart = false) {
+    let st;
+    try { st = await api('/api/parts'); } catch (e) { return; }
+    const bar = $('partsBar'), prog = $('partsProg');
+    const show = (id, on) => $(id).classList.toggle('hidden', !on);
+    partsBusy = st.state === 'downloading' || st.state === 'unpacking';
+    if (st.state === 'idle' || (atStart && st.state === 'done')) { bar.classList.add('hidden'); showPartsBox(); return; }
+    bar.classList.remove('hidden');
+    show('partsProg', partsBusy); show('partsStop', st.state === 'downloading');
+    show('partsRetry', st.state === 'error'); show('partsClose', st.state === 'error');
+    show('partsRestart', st.state === 'restart');
+    if (st.state === 'error') { $('partsText').textContent = st.error; showPartsBox(); return; }
+    if (st.state === 'restart') {
+      $('partsText').textContent = 'اكتمل التنزيل. أعد تشغيل البرنامج ليعمل Nuqta و EasyOCR.';
+      try { ENGINES = (await api('/api/engines')).engines; fillEngineSelect(); } catch (e) { /* the list stays */ }
+      showPartsBox();
+      return;
+    }
+    if (st.state === 'done') {
+      bar.classList.add('hidden');
+      try { ENGINES = (await api('/api/engines')).engines; } catch (e) { return; }
+      fillEngineSelect();
+      if (partsWanted && ENGINES.some((e) => e.id === partsWanted && e.available)) {
+        $('engineSel').value = partsWanted; store.set('engine', partsWanted, true); engineChanged();
+      }
+      toast('أصبح قارئا Nuqta و EasyOCR جاهزين.');
+      showPartsBox();
+      return;
+    }
+    const mb = (n) => Math.round(n / 1048576).toLocaleString('en');
+    if (st.state === 'unpacking') { $('partsText').textContent = 'فك ضغط القرّاء الإضافيين…'; prog.removeAttribute('value'); }
+    else if (st.total) { $('partsText').textContent = `تنزيل القرّاء الإضافيين… ${mb(st.done)} من ${mb(st.total)} ميجابايت`; prog.value = st.done / st.total; }
+    else { $('partsText').textContent = 'تنزيل القرّاء الإضافيين…'; prog.removeAttribute('value'); }
+    showPartsBox();
+    setTimeout(watchParts, 1000);
+  }
+  function showPartsBox() {
+    $('partsBox').classList.toggle('hidden', !ENGINES.some((e) => e.installable));
+    $('partsInfo').textContent = partsBusy ? $('partsText').textContent
+      : 'Nuqta (الأدق للعربية، وأبطأ) و EasyOCR غير مثبتين. يُنزَّلان معاً، نحو 2 جيجابايت.';
+    $('btnParts').disabled = partsBusy;
+  }
 
   function keyFor(engineId) {
     const e = ENGINES.find((x) => x.id === engineId);
@@ -626,6 +839,8 @@
     updateStage();
     $('btnRead').disabled = !p || busy;
     $('readState').textContent = text || (busy ? 'جارٍ القراءة…' : p && p.readWith ? 'قُرئت بـ ' + engineLabel(p.readWith) : '');
+    $('btnReadSheet').classList.toggle('busy', !!busy);  // phones: the reading shows on the toolbar's القراءة
+    $('btnReadSheet').classList.toggle('unread', !!p && !busy && !p.blocks);
   }
 
   function pushVersion(p, label, blocks) {
@@ -812,7 +1027,7 @@
     if (canRead) fillEngineChoices($('noteEngine'));
     const known = suggestions.get(String(markBox(mark)));
     if (known) showSuggestion(known);
-    pop.classList.remove('hidden');
+    slideIn(pop); pop.classList.remove('hidden');
     placeNote();
     showCrop(mark);  // async; the panel is placed again once the picture has a size
     const f = editNote || !note ? $('noteText') : $('noteWord'); f.focus(); f.select();
@@ -820,6 +1035,7 @@
   function placeNote() {
     if (!noteMark) return;
     const pop = $('notePop'), r = noteMark.getBoundingClientRect();
+    if (asSheet(pop)) return;
     const below = r.bottom + 8, fits = below + pop.offsetHeight < window.innerHeight - 10;
     pop.style.top = Math.max(10, fits ? below : r.top - pop.offsetHeight - 8) + 'px';
     pop.style.left = Math.max(10, Math.min(window.innerWidth - pop.offsetWidth - 10, r.left)) + 'px';
@@ -846,7 +1062,7 @@
     $('noteReadBtn').disabled = false;
   }
   function closeNote() {
-    $('notePop').classList.add('hidden');
+    slideOut($('notePop'), () => $('notePop').classList.add('hidden'));
     if (noteMark) noteMark.classList.remove('focus');
     noteMark = null;
   }
@@ -902,11 +1118,12 @@
   // typed) shows nothing on a click; the toolbar button says why.
   let lineAt = null;       // { t: pe.readTarget(), which: 'line' | 'para' | 'row', result }
   let lineWhich = 'line';  // the last choice, while the app is open
-  // the click preview can be turned off from the toolbar (remembered on this computer)
-  const previewOn = () => store.get('linePreview') !== 'off';
+  // the click preview can be turned off from the toolbar (remembered on this computer); phones start with it off,
+  // since there it comes up as a sheet over half the screen on every tap into the text
+  const previewOn = () => { const v = store.get('linePreview'); return v ? v === 'on' : !sheets(); };
   function togglePreview() {
     const on = !previewOn();
-    store.set('linePreview', on ? '' : 'off', true);
+    store.set('linePreview', on ? 'on' : 'off', true);
     if (!on) closeLine();
     toast(on ? 'تظهر صورة السطر عند النقر في النص.' : 'أُوقفت معاينة السطر عند النقر. زر "أعد القراءة" يعرضه متى شئت.');
   }
@@ -926,7 +1143,7 @@
     $('linePickLine').classList.toggle('hidden', !t.line);
     $('linePickRow').classList.toggle('hidden', !t.row);
     $('linePickPara').textContent = t.cell ? 'الخلية' : 'الفقرة';
-    $('linePop').classList.remove('hidden');
+    slideIn($('linePop')); $('linePop').classList.remove('hidden');
     if (!why) {
       const sel = $('lineEngine'), keep = sel.value;
       fillEngineChoices(sel);
@@ -960,6 +1177,7 @@
     const t = lineAt.t, near = t.line || t.para;  // next to the line that was clicked, also for its paragraph
     const r = near ? pe.rectOf(near.from, near.to) : pe.rectOf(t.at, t.at);
     const pop = $('linePop'), w = pop.offsetWidth, h = pop.offsetHeight;
+    if (asSheet(pop)) return;
     const below = r.bottom + 8, fits = below + h < window.innerHeight - 10;
     pop.style.top = Math.max(10, fits ? below : r.top - h - 8) + 'px';
     pop.style.left = Math.max(10, Math.min(window.innerWidth - w - 10, r.right - w)) + 'px';
@@ -997,7 +1215,7 @@
   }
   function closeLine() {
     lineAt = null;
-    $('linePop').classList.add('hidden');
+    slideOut($('linePop'), () => $('linePop').classList.add('hidden'));
   }
 
   // a picture on the clipboard pasted into the text goes in as a picture of the document, after the line
@@ -1031,16 +1249,102 @@
   function insertPicture() {
     const p = draft.pages[current];
     if (!p) { toast('أضف صورة الصفحة أولاً.', true); return; }
-    window.ImageEditor.open({
-      src: imgUrl(p), rotation: p.rotation || 0, pick: true,
-      onSave: async (blob, crop) => {
-        const fd = new FormData(); fd.append('file', blob, 'figure.jpg');
-        const r = await api(`/api/drafts/${draft.id}/images`, { method: 'POST', body: fd });
-        if (!pe) { p.blocks = p.blocks || []; renderEditor(); }
-        pe.insertBlock({ type: 'figure', attrs: { image: r.name, w: r.width, h: r.height, wFrac: +crop.w.toFixed(3), align: null } });
-        toast('أُدرجت الصورة. اضغطها لتغيير محاذاتها أو حذفها.');
-      }
+    window.ImageEditor.open({ src: imgUrl(p), rotation: p.rotation || 0, pick: true, onSave: (blob, crop) => insertFigure(blob, crop.w) });
+  }
+  // wFrac: the picture's share of the page width on the photo, so it comes out the same size on paper
+  async function insertFigure(blob, wFrac) {
+    const p = draft.pages[current];
+    const fd = new FormData(); fd.append('file', blob, 'figure.jpg');
+    const r = await api(`/api/drafts/${draft.id}/images`, { method: 'POST', body: fd });
+    if (!pe) { p.blocks = p.blocks || []; renderEditor(); }
+    pe.insertBlock({ type: 'figure', attrs: { image: r.name, w: r.width, h: r.height, wFrac: +wFrac.toFixed(3), align: null } });
+    toast('أُدرجت الصورة. اضغطها لتغيير محاذاتها أو حذفها.');
+  }
+
+  // Select on the photo: drag a box around a part of it, drag inside the box to move it, then copy it (to paste
+  // anywhere, the text too) or insert it in the text. The box is kept as fractions of the photo as shown (after
+  // its rotation), so zooming keeps it in place; another page or another rotation drops it.
+  let sel = null;  // { key, x0, y0, x1, y1 }
+  const selKey = () => { const p = draft && draft.pages[current]; return p ? p.image + '@' + (p.rotation || 0) : ''; };
+  function setSelecting(on) {
+    if (on && !(draft && draft.pages[current])) { toast('أضف صورة الصفحة أولاً.', true); return; }
+    $('photoFrame').classList.toggle('selecting', on);
+    $('btnSelect').setAttribute('aria-pressed', on);
+    if (!on) clearSel(); else if (!sel) toast('اسحب على الصورة حول الجزء المطلوب.');
+  }
+  function clearSel() { sel = null; $('selBox').classList.add('hidden'); }
+  function placeSel() {
+    const box = $('selBox');
+    if (!sel || sel.key !== selKey()) { clearSel(); return; }
+    const f = $('photoFrame'), r = $('photoImg').getBoundingClientRect(), fr = f.getBoundingClientRect();
+    const left = r.left - fr.left - f.clientLeft + f.scrollLeft + sel.x0 * r.width, top = r.top - fr.top - f.clientTop + f.scrollTop + sel.y0 * r.height;
+    Object.assign(box.style, { left: left + 'px', top: top + 'px', width: (sel.x1 - sel.x0) * r.width + 'px', height: (sel.y1 - sel.y0) * r.height + 'px' });
+    box.classList.remove('hidden');
+    // the bar above the box at its right edge; below it when there is no room above; over its top when the box
+    // fills the view; always inside the visible pane, however far the box runs out of it
+    const bar = $('selBar'), b = box.getBoundingClientRect(), w = bar.offsetWidth, h = bar.offsetHeight, gap = 8;
+    const view = { l: fr.left + f.clientLeft + gap, t: fr.top + f.clientTop + gap, r: fr.left + f.clientLeft + f.clientWidth - gap, b: fr.top + f.clientTop + f.clientHeight - gap };
+    const x = Math.max(view.l, Math.min(b.right - w, view.r - w));
+    const y = b.top - gap - h >= view.t ? b.top - gap - h : b.bottom + gap + h <= view.b ? b.bottom + gap : Math.max(view.t, b.top + gap);
+    bar.style.left = x - b.left - box.clientLeft + 'px'; bar.style.top = y - b.top - box.clientTop + 'px';
+  }
+  function initSelect() {
+    const f = $('photoFrame'), box = $('selBox');
+    $('btnSelect').onclick = () => setSelecting(!f.classList.contains('selecting'));
+    $('selCancel').onclick = clearSel;
+    $('selCopy').onclick = copySel;
+    $('selInsert').onclick = async () => {
+      const w = sel.x1 - sel.x0, blob = await new Promise((res) => cutSel().then((c) => c.toBlob(res, 'image/jpeg', 0.92)));
+      try { await insertFigure(blob, w); clearSel(); } catch (e) { toast(e.message, true); }
+    };
+    $('selBar').addEventListener('pointerdown', (e) => e.stopPropagation());
+    f.addEventListener('pointerdown', (e) => {
+      if (!f.classList.contains('selecting') || e.button !== 0) return;
+      const r = $('photoImg').getBoundingClientRect();
+      if (!r.width) return;
+      e.preventDefault(); f.setPointerCapture(e.pointerId);
+      const fx = (ev) => Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), fy = (ev) => Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height));
+      const x = fx(e), y = fy(e), moving = sel && box.contains(e.target), start = sel && { ...sel };
+      if (!moving) sel = { key: selKey(), x0: x, y0: y, x1: x, y1: y };
+      box.classList.add('moving');
+      const drag = new AbortController(), signal = drag.signal;
+      f.addEventListener('pointermove', (ev) => {
+        if (moving) {  // the whole box, kept on the photo
+          const dx = Math.min(1 - start.x1, Math.max(-start.x0, fx(ev) - x)), dy = Math.min(1 - start.y1, Math.max(-start.y0, fy(ev) - y));
+          Object.assign(sel, { x0: start.x0 + dx, x1: start.x1 + dx, y0: start.y0 + dy, y1: start.y1 + dy });
+        } else {
+          Object.assign(sel, { x0: Math.min(x, fx(ev)), x1: Math.max(x, fx(ev)), y0: Math.min(y, fy(ev)), y1: Math.max(y, fy(ev)) });
+        }
+        placeSel();
+      }, { signal });
+      const up = () => {
+        drag.abort(); box.classList.remove('moving');
+        if ((sel.x1 - sel.x0) * r.width < 8 || (sel.y1 - sel.y0) * r.height < 8) clearSel(); else placeSel();  // a click, not a drag
+      };
+      f.addEventListener('pointerup', up, { signal }); f.addEventListener('pointercancel', up, { signal });
     });
+    f.addEventListener('scroll', () => sel && placeSel(), { passive: true });  // keeps the bar's side right
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || !f.classList.contains('selecting') || document.querySelector('dialog[open]')) return;
+      if (sel) clearSel(); else setSelecting(false);
+    });
+  }
+  // the part at the photo's full resolution (as shown: rotated), at most 3000 pixels on its long side
+  async function cutSel() {
+    const p = draft.pages[current];
+    const full = window.ImageEditor._render(await createImageBitmap($('photoImg')), { rot90: p.rotation || 0, fine: 0, bright: 100, contrast: 100, gray: false });
+    const sx = sel.x0 * full.width, sy = sel.y0 * full.height, sw = (sel.x1 - sel.x0) * full.width, sh = (sel.y1 - sel.y0) * full.height;
+    const k = Math.min(1, 3000 / Math.max(sw, sh)), c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(sw * k)); c.height = Math.max(1, Math.round(sh * k));
+    c.getContext('2d').drawImage(full, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    return c;
+  }
+  function copySel() {
+    if (!navigator.clipboard || !window.ClipboardItem) { toast('لا يسمح هذا المتصفح بنسخ الصور.', true); return; }
+    // the item is made now, with the click, and filled when the picture is ready (Safari needs it that way)
+    const png = cutSel().then((c) => new Promise((res) => c.toBlob(res, 'image/png')));
+    navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+      .then(() => toast('نُسخ الجزء. الصقه في النص أو في أي برنامج (Ctrl+V).'), () => toast('تعذر النسخ.', true));
   }
   function flagSelection() {
     const m = pe && pe.flagSelection('');
@@ -1115,8 +1419,11 @@
     $('templateSel').replaceChildren(...TEMPLATES.map((t) => el('option', { value: t.id }, t.name)),
       el('option', { value: '__add' }, '+ إضافة قالب جديد…'));
     if (draft) $('templateSel').value = draft.template || '';
-    $('tplList').replaceChildren(...TEMPLATES.map((t) => el('li', null, t.name,
-      el('button', { type: 'button', class: 'btn ghost small danger', onclick: () => deleteTemplate(t) }, 'حذف'))));
+    $('tplHead').textContent = `قوالب الترويسة (${TEMPLATES.length})`;
+    // the plain template ships with the program (it comes back at every start), so it is not offered for deleting
+    $('tplList').replaceChildren(...TEMPLATES.map((t) => el('li', null, t.name, t.id === 'plain'
+      ? el('span', { class: 'builtin' }, 'مدمج')
+      : el('button', { type: 'button', class: 'btn ghost small danger', onclick: () => deleteTemplate(t) }, 'حذف'))));
   }
   async function reloadTemplates() {
     const tpl = await api('/api/templates'); TEMPLATES = tpl.templates; TPL_ADMIN = tpl.adminRequired; fillTemplateSelect();
@@ -1152,7 +1459,18 @@
     showTheme();
     $('setAuthor').value = settings.author; $('setClaude').value = settings.claudeKey;
     $('setGoogle').value = settings.googleKey; $('setRemember').checked = settings.remember;
+    showPartsBox();
+    showUpdateBox();
+    // opened before the start-up check asked (it waits a moment): ask now
+    if (appVersion === undefined) api('/api/update').then((st) => { appVersion = st.current; showUpdateBox(); }).catch(() => {});
     fillTemplateSelect(); $('dlgSettings').showModal();
+  }
+  function showUpdateBox() {
+    $('updateBox').classList.toggle('hidden', !appVersion);
+    if (!appVersion) return;
+    $('updateInfo').textContent = `الإصدار ${appVersion}`;
+    $('checkUpdateLabel').textContent = 'التحقق من التحديثات';
+    $('btnCheckUpdate').onclick = checkUpdateNow;
   }
   function saveSettings() {
     const keep = $('setRemember').checked;
@@ -1160,7 +1478,6 @@
     store.set('author', $('setAuthor').value.trim(), true);
     store.set('claudeKey', $('setClaude').value.trim(), keep);
     store.set('googleKey', $('setGoogle').value.trim(), keep);
-    toast('حُفظت الإعدادات.');
   }
 
   // ------------------------------------------------------------------ wiring
@@ -1172,7 +1489,26 @@
     $('colFilter').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); closeColFilter(true); } });
     $('btnBack').onclick = () => { location.hash = ''; };
     $('btnSettings').onclick = openSettings;
-    $('btnSettingsSave').onclick = saveSettings;
+    // Settings save as they change, like the theme: closing never drops a typed name or key
+    for (const id of ['setAuthor', 'setClaude', 'setGoogle']) $(id).addEventListener('input', saveSettings);
+    $('setRemember').addEventListener('change', saveSettings);
+    $('btnParts').onclick = () => { $('dlgSettings').close(); offerParts('nuqta'); };
+    $('btnPhone').onclick = () => { refreshPhone(); $('dlgPhone').showModal(); };
+    $('phoneStart').onclick = () => phoneAction('/api/remote/start');
+    $('phoneStop').onclick = () => phoneAction('/api/remote/stop');
+    $('copyUrl').onclick = () => copyText('phoneUrl');
+    $('copyPw').onclick = () => copyText('phonePw');
+    $('partsRetry').onclick = startParts;
+    $('partsStop').onclick = () => api('/api/parts/stop', { method: 'POST' }).then(() => toast('أُوقف التنزيل.')).catch((e) => toast(e.message, true));
+    $('partsClose').onclick = () => $('partsBar').classList.add('hidden');
+    $('partsRestart').onclick = async () => {
+      if (draft && dirty) await saveDraft();
+      $('partsRestart').disabled = true;
+      api('/api/restart', { method: 'POST' }).catch((e) => { toast(e.message, true); $('partsRestart').disabled = false; });
+    };
+    // the browser's own "please fill out this field" speaks the browser's language, not the page's
+    $('newName').addEventListener('invalid', (e) => e.target.setCustomValidity(e.target.validity.valueMissing ? 'اكتب اسم الوثيقة أولاً.' : ''));
+    $('newName').addEventListener('input', (e) => e.target.setCustomValidity(''));
     document.querySelectorAll('#setTheme button').forEach((b) => { b.onclick = () => { DocTheme.set(b.dataset.pick); showTheme(); }; });
     $('btnTplAdd').onclick = addTemplate;
     $('btnTplNew').onclick = () => openTemplateAdd(false);
@@ -1215,17 +1551,19 @@
     window.addEventListener('resize', applyPhotoTransform);
 
     $('engineSel').onchange = () => {  // remember only a real pick, so a later change of default still reaches the user
+      const picked = ENGINES.find((e) => e.id === $('engineSel').value);
+      if (picked && !picked.available && picked.installable) { fillEngineSelect(); offerParts(picked.id); return; }
       store.set('engine', $('engineSel').value, true);
       engineChanged();
     };
     $('modelSel').onchange = () => store.set('model', $('modelSel').value, true);
     $('langsSel').value = store.get('langs') || 'ara+eng';
     $('langsSel').onchange = () => store.set('langs', $('langsSel').value, true);
-    $('btnRead').onclick = () => readPage(current);
-    $('btnReadAll').onclick = () => readAllUnread();
+    $('btnRead').onclick = () => { setReadSheet(false); readPage(current); };
+    $('btnReadAll').onclick = () => { setReadSheet(false); readAllUnread(); };
     toolbar = window.DocEditor.toolbar($('fmtBar'), () => pe, {
       picture: insertPicture, flag: flagSelection, engines: engineChoices, hasPage: () => !!(draft && draft.pages[current]),
-      showLine: () => openLine(true), previewOn, togglePreview,
+      showLine: () => openLine(true), previewOn, togglePreview, slideOut, shutPop,
     }, $('editorScroll'));
     $('linePickLine').onclick = () => pickLine('line'); $('linePickPara').onclick = () => pickLine('para'); $('linePickRow').onclick = () => pickLine('row');
     $('lineReadBtn').onclick = rereadLine; $('lineUse').onclick = useLine; $('lineClose').onclick = closeLine;
@@ -1252,8 +1590,10 @@
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && draft) { e.preventDefault(); saveDraft(); }
       if (e.key === 'Escape') {
+        if (selFor) { closeSelSheet(true); return; }  // a list over a sheet: just the list
         closeNote(); closeLine(); closeColFilter(true);
-        document.querySelectorAll('details.pop-wrap[open]').forEach((d) => { d.open = false; d.querySelector('summary').focus(); });
+        document.querySelectorAll('details.pop-wrap[open]').forEach((d) => { shutPop(d); d.querySelector('summary').focus(); });
+        if (document.body.classList.contains('read-open')) { setReadSheet(false); $('btnReadSheet').focus(); }
       }
     });
 
@@ -1270,14 +1610,33 @@
     }
 
     // popovers: one open at a time, closed by a click anywhere outside them
-    const pops = [...document.querySelectorAll('details.pop-wrap')];
-    pops.forEach((d) => d.addEventListener('toggle', () => { if (d.open) pops.forEach((o) => { if (o !== d) o.open = false; }); }));
-    document.addEventListener('pointerdown', (e) => {
-      pops.forEach((d) => { if (d.open && !d.contains(e.target)) d.open = false; });
+    // looked up each time: the text toolbar adds its own (its phone sheets, editor.js)
+    const pops = () => document.querySelectorAll('details.pop-wrap');
+    document.addEventListener('toggle', (e) => {  // toggle does not bubble; this listens on the way down
+      const d = e.target;
+      if (!(d.matches && d.matches('details.pop-wrap') && d.open)) return;
+      slideIn(d.querySelector(':scope > .pop') || d);
+      pops().forEach((o) => { if (o !== d && !o.contains(d)) shutPop(o); });  // one at a time
+    }, true);
+    const closePops = (e) => {
+      if (e.target.closest && e.target.closest('#selSheet')) return;  // a list over a sheet: the sheet stays
+      if (selFor) closeSelSheet(false);
+      if (document.body.classList.contains('read-open') && !e.target.closest('#readBar, #btnReadSheet')) setReadSheet(false);
+      pops().forEach((d) => { if (d.open && !d.contains(e.target)) shutPop(d); });
       if (colFilterFor && !e.target.closest('#colFilter, .filt')) closeColFilter(false);
       if (noteMark && !e.target.closest('#notePop, mark.flag, .flag-item')) closeNote();
       if (lineAt && !e.target.closest('#linePop')) closeLine();
-    });
+    };
+    // a sheet's dim (the body's ::after, app.css) closes when the finger lifts, not on the press: the press and the lift
+    // are both on the dim, so the click they make goes to the body and nothing under it is pressed. (Not on "click":
+    // iPhone Safari sends no click for a tap on the plain body.)
+    const onDim = (e) => e.target === document.body && sheets();
+    document.addEventListener('pointerdown', (e) => { if (!onDim(e)) closePops(e); });
+    placeForPhone();
+    window.addEventListener('resize', () => { placeForPhone(); if (!sheets()) { document.body.classList.remove('read-open'); closeSelSheet(false); } });
+    initSelSheets();
+    $('btnReadSheet').onclick = () => setReadSheet(!document.body.classList.contains('read-open'));
+    document.addEventListener('pointerup', (e) => { if (onDim(e)) closePops(e); });
 
     $('btnPick').onclick = () => $('fileAdd').click();
     $('btnPickBig').onclick = () => $('fileAdd').click();
@@ -1304,14 +1663,15 @@
     window.addEventListener('resize', () => { placeNote(); placeLine(); });
     initSplitters();
     initCollapse();
-    initPhotoPan();
+    initPhotoPan(); initPhotoPinch();
+    initSelect();
   }
 
   // drag the photo to move around it when it is zoomed in or taller than the pane (touch scrolls natively)
   function initPhotoPan() {
     const f = $('photoFrame');
     f.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'touch' || e.button !== 0 || !f.classList.contains('can-pan')) return;
+      if (e.pointerType === 'touch' || e.button !== 0 || !f.classList.contains('can-pan') || f.classList.contains('selecting')) return;
       e.preventDefault();
       f.setPointerCapture(e.pointerId); f.classList.add('panning');
       const x0 = e.clientX, y0 = e.clientY, left0 = f.scrollLeft, top0 = f.scrollTop;
@@ -1321,6 +1681,33 @@
       const up = () => { drag.abort(); f.classList.remove('panning'); };
       f.addEventListener('pointerup', up, { signal }); f.addEventListener('pointercancel', up, { signal });
     });
+  }
+
+  // Touch: two fingers zoom the photo (the zoom slider follows), about the point between them; one finger scrolls.
+  // The page itself does not zoom (app.css touch-action; Safari's own gesture is stopped here).
+  function initPhotoPinch() {
+    const f = $('photoFrame'), z = $('zoom');
+    let pinch = null;
+    const span = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    f.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2 && !z.disabled && !f.classList.contains('selecting')) pinch = { d0: span(e.touches), z0: +z.value };
+    }, { passive: true });
+    f.addEventListener('touchmove', (e) => {
+      if (!pinch || e.touches.length !== 2) return;
+      e.preventDefault();
+      const next = Math.round(Math.max(+z.min, Math.min(+z.max, pinch.z0 * span(e.touches) / pinch.d0)));
+      if (next === +z.value) return;
+      const img = $('photoImg'), before = img.getBoundingClientRect(), r = next / +z.value;
+      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2, my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      z.value = next; applyPhotoTransform();
+      // keep the spot between the fingers where it was (relative moves: right-to-left scrolling too)
+      const after = img.getBoundingClientRect();
+      f.scrollLeft += after.left + (mx - before.left) * r - mx;
+      f.scrollTop += after.top + (my - before.top) * r - my;
+    }, { passive: false });
+    const end = (e) => { if (e.touches.length < 2) pinch = null; };
+    f.addEventListener('touchend', end); f.addEventListener('touchcancel', end);
+    f.addEventListener('gesturestart', (e) => e.preventDefault());
   }
 
   // Drag (or arrow keys on) the bars between pages | photo | text and above the flags list.

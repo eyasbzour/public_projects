@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
 <title>تحويل الوثائق</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%230066d6%27/%3E%3Cpath d=%27M9 8h14M9 13h14M9 18h14M9 23h9%27 stroke=%27white%27 stroke-width=%272.5%27/%3E%3C/svg%3E">
 <script src="js/theme.js"></script>
@@ -16,6 +16,10 @@
     <span class="brand-name">تحويل الوثائق المصوّرة إلى مستندات</span>
   </button>
   <div class="topbar-actions">
+    <!-- the Windows program, on the PC: its pages on a phone (server/remote.py) -->
+    <button class="btn ghost hidden" id="btnPhone" type="button">
+      <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#device-mobile"/></svg><span>على الهاتف</span>
+    </button>
     <button class="btn ghost" id="btnSettings" type="button">
       <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#gear"/></svg><span>الإعدادات</span>
     </button>
@@ -26,8 +30,23 @@
 <div id="updateBar" class="update-bar hidden" role="status">
   <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-clockwise"/></svg>
   <span id="updateText"></span>
+  <button class="btn ghost small hidden" id="updateNotesBtn" type="button" aria-expanded="false" aria-controls="updateNotes">ما الجديد؟</button>
   <button class="btn small primary" id="btnUpdate" type="button">تحديث الآن</button>
   <button class="btn ghost small" id="updateLater" type="button">لاحقاً</button>
+</div>
+<ul id="updateNotes" class="update-notes hidden"></ul>
+
+<!-- the Windows program: the optional readers downloading (server/parts.py) -->
+<div id="partsBar" class="update-bar hidden" role="status">
+  <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#file-arrow-down"/></svg>
+  <span id="partsText"></span>
+  <progress id="partsProg" max="1"></progress>
+  <button class="btn ghost small" id="partsStop" type="button">إيقاف</button>
+  <button class="btn small hidden" id="partsRetry" type="button">إعادة المحاولة</button>
+  <button class="btn small primary hidden" id="partsRestart" type="button">إعادة التشغيل</button>
+  <button class="btn ghost small icon-only hidden" id="partsClose" type="button" aria-label="إغلاق">
+    <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
+  </button>
 </div>
 
 <!-- ============================ HOME ============================ -->
@@ -71,7 +90,7 @@
         <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrow-right"/></svg>
       </button>
       <input id="draftName" class="name-input" aria-label="اسم الوثيقة">
-      <span id="saveState" class="save-state" role="status">محفوظ</span>
+      <span id="saveState" class="save-state" role="status" data-state="saved"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#check-circle"/></svg><span>محفوظ</span></span>
     </div>
     <div class="draftbar-end">
       <button class="btn ghost" id="btnSave" type="button" title="حفظ (Ctrl+S)">
@@ -82,6 +101,8 @@
           <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#sliders-horizontal"/></svg><span>الترويسة والخيارات</span>
         </summary>
         <div class="pop opts-pop">
+          <!-- phones: the header's format and "read all and produce" (app.js placeForPhone) -->
+          <div class="phone-slot phone-doc" id="phoneDocSlot"></div>
           <section class="pop-sec" aria-labelledby="optTplHead">
             <h3 class="pop-head" id="optTplHead">الترويسة</h3>
             <select id="templateSel" aria-labelledby="optTplHead"></select>
@@ -106,12 +127,12 @@
           </section>
         </div>
       </details>
-      <label class="inline-field"><span class="sr-only">الصيغة</span><select id="formatSel" aria-label="صيغة الملف"><option value="docx">Word (.docx)</option></select></label>
-      <button class="btn" id="btnQuick" type="button" title="يقرأ كل الصفحات غير المقروءة ثم ينتج الملف مباشرة، والمواضع غير الواضحة تُظلَّل">
+      <label class="inline-field" data-phone-in="phoneDocSlot"><span class="sr-only">صيغة الملف</span><select id="formatSel" aria-label="صيغة الملف"><option value="docx">Word (.docx)</option></select></label>
+      <button class="btn" id="btnQuick" type="button" data-phone-in="phoneDocSlot" title="يقرأ كل الصفحات غير المقروءة ثم ينتج الملف مباشرة، والمواضع غير الواضحة تُظلَّل">
         <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#lightning"/></svg><span>قراءة الكل والإنتاج</span>
       </button>
       <button class="btn primary" id="btnExport" type="button">
-        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#file-arrow-down"/></svg><span>إنتاج الملف</span>
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#file-arrow-down"/></svg><span data-short="إنتاج">إنتاج الملف</span>
       </button>
     </div>
   </div>
@@ -176,6 +197,9 @@
         <button class="btn small" id="btnEditImg" type="button" title="تدوير، قص، تقويم، سطوع وتباين">
           <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#crop"/></svg><span>تحرير الصورة</span>
         </button>
+        <button class="btn small" id="btnSelect" type="button" aria-pressed="false" title="اسحب على الصورة حول جزء منها لنسخه أو إدراجه في النص">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#selection"/></svg><span>تحديد</span>
+        </button>
         <button class="btn ghost small icon-only" id="rotL" type="button" title="تدوير لليسار" aria-label="تدوير لليسار">
           <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrow-counter-clockwise"/></svg>
         </button>
@@ -190,6 +214,14 @@
         <span class="photo-label muted" id="photoLabel"></span>
       </div>
       <div class="photo-frame" id="photoFrame"><img id="photoImg" alt="" draggable="false">
+        <!-- a part of the photo picked with btnSelect: drag inside it to move it; its bar copies or inserts it -->
+        <div class="sel-box hidden" id="selBox">
+          <div class="sel-bar" id="selBar" role="toolbar" aria-label="الجزء المحدد">
+            <button class="btn small" id="selCopy" type="button"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#copy"/></svg><span>نسخ</span></button>
+            <button class="btn small" id="selInsert" type="button"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#images"/></svg><span>إدراج في النص</span></button>
+            <button class="btn ghost small icon-only" id="selCancel" type="button" aria-label="إلغاء التحديد" title="إلغاء التحديد (Esc)"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg></button>
+          </div>
+        </div>
         <div class="photo-empty hidden" id="photoEmpty">
           <svg class="i big" aria-hidden="true"><use href="vendor/icons.svg#images"/></svg>
           <b>أضف صور صفحات الوثيقة</b>
@@ -208,7 +240,8 @@
       <button class="rail" type="button" data-pane="text" aria-label="إظهار النص" title="إظهار النص">
         <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-out-line-horizontal"/></svg><span>النص</span>
       </button>
-      <div class="pane-head read-bar">
+      <!-- phones: this bar is the reading sheet, opened by btnReadSheet -->
+      <div class="pane-head read-bar" id="readBar" role="group" aria-label="القراءة">
         <button class="btn ghost small icon-only pane-collapse" type="button" data-pane="text" aria-label="طي النص" title="طي النص">
           <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-in-line-horizontal"/></svg>
         </button>
@@ -247,15 +280,18 @@
         </button>
         <button class="btn small" id="btnReadAll" type="button">اقرأ غير المقروء</button>
         <span id="readState" class="read-state muted" role="status"></span>
-      </div>
-      <div class="edit-bar">
-        <div class="fmt-bar" id="fmtBar" role="toolbar" aria-label="تنسيق النص"></div>
+        <!-- the page's earlier readings and versions: with the reading controls -->
         <details class="pop-wrap" id="verPop">
           <summary class="btn ghost small" title="القراءات والنسخ السابقة لنص هذه الصفحة">
             <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#clock-counter-clockwise"/></svg><span>النسخ</span>
           </summary>
           <div class="pop ver-pop"><ul id="verList" class="ver-list"></ul></div>
         </details>
+      </div>
+      <div class="edit-bar">
+        <button class="tb tb-text tb-lead" id="btnReadSheet" type="button" aria-expanded="false" aria-controls="readBar"
+                aria-label="القراءة: اقرأ الصفحة، واختر القارئ وخياراته، والنسخ السابقة"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#scan"/></svg>القراءة</button>
+        <div class="fmt-bar" id="fmtBar" role="toolbar" aria-label="تنسيق النص"></div>
       </div>
       <div class="editor-scroll" id="editorScroll">
         <div id="editor" class="editor sheet" aria-label="نص الصفحة"></div>
@@ -282,13 +318,14 @@
 
 <!-- ============================ SETTINGS ============================ -->
 <dialog id="dlgSettings" aria-labelledby="setTitle">
-  <form method="dialog" class="dlg">
+  <form method="dialog" class="dlg scrolls">
     <div class="dlg-head">
       <h2 id="setTitle">الإعدادات</h2>
       <button class="btn ghost small icon-only" value="cancel" formnovalidate aria-label="إغلاق">
         <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
       </button>
     </div>
+    <div class="dlg-body">
     <div class="field">
       <span id="setThemeHead">المظهر</span>
       <div class="seg theme-seg" id="setTheme" role="group" aria-labelledby="setThemeHead">
@@ -305,16 +342,73 @@
       <label class="field">مفتاح Google Vision<input id="setGoogle" type="password" autocomplete="off" dir="ltr"></label>
       <label class="check"><input type="checkbox" id="setRemember"> تذكر المفاتيح على هذا الجهاز</label>
     </fieldset>
+    <!-- the Windows program only, while Nuqta and EasyOCR are not installed -->
+    <fieldset id="partsBox" class="hidden">
+      <legend>القرّاء الإضافيون</legend>
+      <div class="set-row">
+        <p class="muted small-print" id="partsInfo" role="status"></p>
+        <button class="btn small" id="btnParts" type="button">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#file-arrow-down"/></svg><span>تنزيل</span>
+        </button>
+      </div>
+    </fieldset>
     <fieldset id="adminBox">
-      <legend>قوالب الترويسة</legend>
+      <legend id="tplHead">قوالب الترويسة</legend>
       <ul id="tplList" class="tpl-list"></ul>
       <button class="btn small" id="btnTplNew" type="button">
         <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#plus"/></svg><span>إضافة قالب جديد</span>
       </button>
     </fieldset>
+    <fieldset>
+      <legend>عن البرنامج</legend>
+      <!-- the Windows program only: it also checks by itself at start -->
+      <div class="set-row hidden" id="updateBox">
+        <p class="small-print" id="updateInfo" role="status"></p>
+        <button class="btn small" id="btnCheckUpdate" type="button">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-clockwise"/></svg><span id="checkUpdateLabel"></span>
+        </button>
+      </div>
+      <!-- a new window: the Windows program opens it in the browser (pywebview) -->
+      <p class="muted small-print credit">تطوير: <a href="https://github.com/eyasbzour?tab=repositories" target="_blank" rel="noopener" dir="ltr">eyasbzour</a></p>
+    </fieldset>
+    </div>
+    <!-- every field saves as it changes, like the theme -->
     <div class="dlg-actions">
-      <button class="btn primary" value="save" id="btnSettingsSave">حفظ</button>
-      <button class="btn ghost" value="cancel" formnovalidate>إغلاق</button>
+      <button class="btn primary" value="done" formnovalidate>تم</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- use on phone: a link and a password, new each time (server/remote.py) -->
+<dialog id="dlgPhone" aria-labelledby="phoneTitle">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head">
+      <h2 id="phoneTitle">استخدام البرنامج على الهاتف</h2>
+      <button class="btn ghost small icon-only" value="cancel" formnovalidate aria-label="إغلاق">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
+      </button>
+    </div>
+    <div id="phoneOff" class="phone-text">
+      <p>افتح البرنامج من متصفح الهاتف وتابع العمل على المسودات نفسها، من أي مكان. يعمل الرابط ما دام البرنامج مفتوحاً على هذا الحاسوب.</p>
+      <p class="muted small-print">يمر الاتصال مشفّراً عبر خدمة Cloudflare. الرابط وكلمة المرور جديدان في كل مرة، ولا يدخل أحد من دون كلمة المرور.</p>
+    </div>
+    <p id="phoneBusy" class="muted hidden" role="status">جارٍ تجهيز الاتصال… قد يستغرق ذلك دقيقة في المرة الأولى.</p>
+    <p id="phoneError" class="phone-error hidden" role="alert"></p>
+    <div id="phoneOn" class="phone-on hidden">
+      <div class="qr" id="phoneQr" role="img" aria-label="رمز QR للرابط"></div>
+      <ol class="phone-steps">
+        <li>امسح الرمز بكاميرا الهاتف، أو افتح هذا الرابط:
+          <span class="copy-row"><code id="phoneUrl" dir="ltr"></code>
+            <button class="btn small" type="button" id="copyUrl"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#copy"/></svg><span>نسخ</span></button></span></li>
+        <li>اكتب كلمة المرور:
+          <span class="copy-row"><code id="phonePw" class="pw" dir="ltr"></code>
+            <button class="btn small" type="button" id="copyPw"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#copy"/></svg><span>نسخ</span></button></span></li>
+      </ol>
+    </div>
+    <div class="dlg-actions">
+      <button class="btn primary" type="button" id="phoneStart">تشغيل</button>
+      <button class="btn danger hidden" type="button" id="phoneStop">إيقاف</button>
+      <button class="btn ghost" value="done" formnovalidate>تم</button>
     </div>
   </form>
 </dialog>
@@ -465,6 +559,12 @@
 </dialog>
 
 <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+<!-- phones: a <select> with three or more choices opens as this sheet (app.js openSelSheet) -->
+<div id="selSheet" class="sel-sheet hidden" role="dialog" aria-modal="true" aria-labelledby="selTitle">
+  <h3 class="sel-title" id="selTitle"></h3>
+  <div class="sel-list" id="selList" role="listbox" aria-labelledby="selTitle"></div>
+</div>
 
 <script src="vendor/jszip.min.js"></script>
 <script src="vendor/tiptap.min.js"></script>
