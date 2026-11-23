@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<title data-i18n="ui.titleShort"></title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%230066d6%27/%3E%3Cpath d=%27M9 8h14M9 13h14M9 18h14M9 23h9%27 stroke=%27white%27 stroke-width=%272.5%27/%3E%3C/svg%3E">
+<script src="js/theme.js"></script>
+<!-- the interface language (js/i18n.js); all.js (the default and every web/i18n file) comes from the server (main.py) -->
+<script src="js/i18n.js"></script>
+<script src="i18n/all.js"></script>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="brand" id="brand" type="button" data-i18n-aria-label="ui.home">
+    <span class="brand-mark" aria-hidden="true"><svg class="i"><use href="vendor/icons.svg#scan"/></svg></span>
+    <span class="brand-name" data-i18n="ui.titleFull"></span>
+  </button>
+  <div class="topbar-actions">
+    <!-- the Windows program, on the PC: its pages on a phone (server/remote.py) -->
+    <button class="btn ghost hidden" id="btnPhone" type="button">
+      <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#device-mobile"/></svg><span data-i18n="app.phone"></span>
+    </button>
+    <button class="btn ghost" id="btnSettings" type="button">
+      <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#gear"/></svg><span data-i18n="ui.settings"></span>
+    </button>
+  </div>
+</header>
+
+<!-- the Windows program: a newer version on GitHub -->
+<div id="updateBar" class="update-bar hidden" role="status">
+  <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-clockwise"/></svg>
+  <span id="updateText"></span>
+  <button class="btn ghost small hidden" id="updateNotesBtn" type="button" aria-expanded="false" aria-controls="updateNotes" data-i18n="app.whatsNew"></button>
+  <button class="btn small primary" id="btnUpdate" type="button" data-i18n="app.updateNow"></button>
+  <button class="btn ghost small" id="updateLater" type="button" data-i18n="ui.later"></button>
+</div>
+<ul id="updateNotes" class="update-notes hidden"></ul>
+
+<!-- the Windows program: the optional readers downloading (server/parts.py) -->
+<div id="partsBar" class="update-bar hidden" role="status">
+  <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#file-arrow-down"/></svg>
+  <span id="partsText"></span>
+  <progress id="partsProg" max="1"></progress>
+  <button class="btn ghost small" id="partsStop" type="button" data-i18n="ui.stop"></button>
+  <button class="btn small hidden" id="partsRetry" type="button" data-i18n="app.tryAgain"></button>
+  <button class="btn small primary hidden" id="partsRestart" type="button" data-i18n="ui.restart"></button>
+  <button class="btn ghost small icon-only hidden" id="partsClose" type="button" data-i18n-aria-label="ui.close">
+    <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
+  </button>
+</div>
+
+<!-- ============================ HOME ============================ -->
+<main id="viewHome" class="view home">
+  <header class="home-head">
+    <h1 data-i18n="ui.drafts"></h1>
+    <p class="muted" data-i18n="ui.addPagePhotosOrderRead"></p>
+  </header>
+
+  <form id="formNew" class="new-form">
+    <label class="field grow"><span data-i18n="ui.documentName"></span><input id="newName" required data-i18n-placeholder="ui.exampleGeneralSecretariatsLetterInstitute"></label>
+    <label class="field"><span data-i18n="ui.yourName"></span><input id="newOwner" data-i18n-placeholder="ui.optional"></label>
+    <button class="btn primary" type="submit">
+      <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#plus"/></svg><span data-i18n="ui.newDraft"></span>
+    </button>
+  </form>
+
+  <section class="drafts" aria-labelledby="draftsTitle">
+    <div class="section-head">
+      <h2 id="draftsTitle"><span data-i18n="ui.savedDrafts"></span> <span class="count" id="draftCount"></span></h2>
+      <button class="btn ghost small icon-only" id="btnRefresh" type="button" data-i18n-title="ui.refreshList" data-i18n-aria-label="ui.refreshList">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-clockwise"/></svg>
+      </button>
+    </div>
+    <div id="draftFilters" class="filter-chips hidden" aria-live="polite"></div>
+    <div id="draftList" class="draft-list"><p class="muted" data-i18n="ui.loading"></p></div>
+    <!-- one panel for the column searches; a desktop shows the clicked column's field, a phone (where two columns are hidden) shows all three -->
+    <div id="colFilter" class="pop col-filter hidden" role="dialog" data-i18n-aria-label="ui.searchColumns">
+      <label class="field" data-col="name"><span data-i18n="ui.searchDocumentNames"></span><input type="search" data-col="name" autocomplete="off"></label>
+      <label class="field" data-col="owner"><span data-i18n="ui.searchPeoplesNames"></span><input type="search" data-col="owner" autocomplete="off"></label>
+      <label class="field" data-col="pages"><span data-i18n="ui.numberPages"></span><input type="number" min="0" inputmode="numeric" data-col="pages"></label>
+    </div>
+  </section>
+</main>
+
+<!-- ============================ DRAFT ============================ -->
+<main id="viewDraft" class="view work hidden">
+  <div class="draftbar">
+    <div class="draftbar-start">
+      <button class="btn ghost icon-only" id="btnBack" type="button" data-i18n-title="ui.backDrafts" data-i18n-aria-label="ui.backDrafts">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrow-left"/></svg>
+      </button>
+      <input id="draftName" class="name-input" data-i18n-aria-label="ui.documentName">
+      <span id="saveState" class="save-state" role="status" data-state="saved"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#check-circle"/></svg><span data-i18n="app.saved"></span></span>
+    </div>
+    <div class="draftbar-end">
+      <button class="btn ghost" id="btnSave" type="button" data-i18n-title="ui.saveCtrlS">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#floppy-disk"/></svg><span data-i18n="ui.save"></span>
+      </button>
+      <details class="pop-wrap" id="outPop">
+        <summary class="btn ghost">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#sliders-horizontal"/></svg><span data-i18n="ui.headerOptions"></span>
+        </summary>
+        <div class="pop opts-pop">
+          <!-- phones: the header's format and "read all and produce" (app.js placeForPhone) -->
+          <div class="phone-slot phone-doc" id="phoneDocSlot"></div>
+          <section class="pop-sec" aria-labelledby="optTplHead">
+            <h3 class="pop-head" id="optTplHead" data-i18n="ui.header"></h3>
+            <select id="templateSel" aria-labelledby="optTplHead"></select>
+          </section>
+          <section class="pop-sec" aria-labelledby="optDocHead">
+            <h3 class="pop-head" id="optDocHead" data-i18n="ui.document"></h3>
+            <label class="field"><span data-i18n="ui.date"></span><input type="date" id="draftDate"></label>
+            <div class="field-row">
+              <label class="field grow"><span data-i18n="ui.font"></span><input id="optFontName" list="fontNames" data-i18n-placeholder="ui.templateFont" autocomplete="off"></label>
+              <label class="field"><span data-i18n="ui.sizePt"></span><input id="optFont" type="number" min="6" max="72" step="0.5" value="14" inputmode="decimal"></label>
+            </div>
+            <datalist id="fontNames">
+              <option value="Simplified Arabic"></option><option value="Traditional Arabic"></option><option value="Sakkal Majalla"></option>
+              <option value="Arial"></option><option value="Tahoma"></option><option value="Times New Roman"></option><option value="Calibri"></option>
+            </datalist>
+          </section>
+          <section class="pop-sec" aria-labelledby="optOutHead">
+            <h3 class="pop-head" id="optOutHead" data-i18n="ui.whenExporting"></h3>
+            <label class="check"><input type="checkbox" id="optHighlight" checked> <span data-i18n="ui.highlightUnclearSpots"></span></label>
+            <label class="check"><input type="checkbox" id="optPageBreaks" checked> <span data-i18n="ui.eachPhotoNewPage"></span></label>
+            <label class="check"><input type="checkbox" id="optMargin" checked> <span data-i18n="ui.notesFootnotesPdfImages"></span></label>
+          </section>
+        </div>
+      </details>
+      <label class="inline-field" data-phone-in="phoneDocSlot"><span class="sr-only" data-i18n="ui.fileFormat"></span><select id="formatSel" data-i18n-aria-label="ui.fileFormat"><option value="docx">Word (.docx)</option></select></label>
+      <button class="btn" id="btnQuick" type="button" data-phone-in="phoneDocSlot" data-i18n-title="ui.readsEveryUnreadPageExports">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#lightning"/></svg><span data-i18n="ui.readAllExport"></span>
+      </button>
+      <button class="btn primary" id="btnExport" type="button" data-i18n-data-short="ui.export">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#file-arrow-down"/></svg><span data-i18n="ui.exportFile"></span>
+      </button>
+    </div>
+  </div>
+
+  <div class="pane-tabs">
+    <div class="seg" role="tablist" data-i18n-aria-label="ui.draftSections">
+      <button type="button" role="tab" data-pane="pages" aria-selected="false" data-i18n="app.colPages"></button>
+      <button type="button" role="tab" data-pane="photo" aria-selected="false" data-i18n="ui.photo"></button>
+      <button type="button" role="tab" data-pane="text" aria-selected="true" data-i18n="editor.groupText"></button>
+    </div>
+  </div>
+
+  <div class="workspace" id="workspace" data-pane="text">
+    <!-- pages -->
+    <aside class="pane pages" id="panePages" data-i18n-aria-label="app.colPages">
+      <button class="rail" type="button" data-pane="pages" data-i18n-aria-label="ui.showPages" data-i18n-title="ui.showPages">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-out-line-horizontal"/></svg><span data-i18n="app.colPages"></span>
+      </button>
+      <div class="pane-head">
+        <button class="btn ghost small icon-only pane-collapse" type="button" data-pane="pages" data-i18n-aria-label="ui.foldPages" data-i18n-title="ui.foldPages">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-in-line-horizontal"/></svg>
+        </button>
+        <h2><span data-i18n="app.colPages"></span> <span class="count" id="pageCount"></span></h2>
+        <label class="btn small primary file-btn" data-i18n-title="ui.addPhotos">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#images"/></svg><span data-i18n="ui.addPhotos"></span>
+          <input type="file" id="fileAdd" accept="image/*" multiple>
+        </label>
+      </div>
+      <div class="order-row">
+        <label class="inline-field"><span data-i18n="ui.order"></span>
+          <select id="orderSel">
+            <option value="name" data-i18n="ui.sortByName"></option>
+            <option value="alpha" data-i18n="ui.sortAlphabetical"></option>
+            <option value="date" data-i18n="ui.sortPhotoDate"></option>
+            <option value="picked" data-i18n="ui.sortAsChosen"></option>
+          </select>
+        </label>
+        <button class="btn ghost small icon-only" id="btnResort" type="button" data-i18n-title="ui.reorderCurrentPagesWay" data-i18n-aria-label="ui.reorderPages">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#sort-ascending"/></svg>
+        </button>
+      </div>
+      <ol id="pageList" class="page-list"></ol>
+      <div class="drop-zone" id="dropHint">
+        <svg class="i big" aria-hidden="true"><use href="vendor/icons.svg#images"/></svg>
+        <p data-i18n="ui.dragPagePhotosHere"></p>
+        <button class="btn small" id="btnPick" type="button" data-i18n="ui.choosePhotos"></button>
+        <p class="muted small-print" data-i18n="ui.afterAddingThemCanDrag"></p>
+      </div>
+    </aside>
+
+    <div class="splitter" data-pane="pages" role="separator" aria-orientation="vertical" aria-controls="panePages" tabindex="0" data-i18n-aria-label="ui.resizePageList" data-i18n-title="ui.dragResizeWidth"></div>
+
+    <!-- photo -->
+    <section class="pane photo" id="panePhoto" data-i18n-aria-label="ui.pagePhoto">
+      <button class="rail" type="button" data-pane="photo" data-i18n-aria-label="ui.showPhoto" data-i18n-title="ui.showPhoto">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-out-line-horizontal"/></svg><span data-i18n="ui.photo"></span>
+      </button>
+      <div class="pane-head tools">
+        <button class="btn ghost small icon-only pane-collapse" type="button" data-pane="photo" data-i18n-aria-label="ui.foldPhoto" data-i18n-title="ui.foldPhoto">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-in-line-horizontal"/></svg>
+        </button>
+        <button class="btn small" id="btnEditImg" type="button" data-i18n-title="ui.rotateCropStraightenBrightnessContrast">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#crop"/></svg><span data-i18n="app.editPhoto"></span>
+        </button>
+        <button class="btn small" id="btnSelect" type="button" aria-pressed="false" data-i18n-title="ui.dragPhotoAroundPartCopy">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#selection"/></svg><span data-i18n="ui.select"></span>
+        </button>
+        <button class="btn ghost small icon-only" id="rotL" type="button" data-i18n-title="ui.rotateLeft" data-i18n-aria-label="ui.rotateLeft">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrow-counter-clockwise"/></svg>
+        </button>
+        <button class="btn ghost small icon-only" id="rotR" type="button" data-i18n-title="ui.rotateRight" data-i18n-aria-label="ui.rotateRight">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrow-clockwise"/></svg>
+        </button>
+        <label class="zoom" data-i18n-title="ui.zoomCtrlMouseWheel">
+          <span class="sr-only" data-i18n="ui.zoom"></span>
+          <input type="range" id="zoom" min="40" max="400" value="100">
+          <output id="zoomVal" class="muted">100%</output>
+        </label>
+        <span class="photo-label muted" id="photoLabel"></span>
+      </div>
+      <div class="photo-frame" id="photoFrame"><img id="photoImg" alt="" draggable="false">
+        <!-- a part of the photo picked with btnSelect: drag inside it to move it; its bar copies or inserts it -->
+        <div class="sel-box hidden" id="selBox">
+          <div class="sel-bar" id="selBar" role="toolbar" data-i18n-aria-label="ui.selectedPart">
+            <button class="btn small" id="selCopy" type="button"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#copy"/></svg><span data-i18n="ui.copy"></span></button>
+            <button class="btn small" id="selInsert" type="button"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#images"/></svg><span data-i18n="photoEditor.insertText"></span></button>
+            <button class="btn ghost small icon-only" id="selCancel" type="button" data-i18n-aria-label="ui.clearSelection" data-i18n-title="ui.clearSelectionEsc"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg></button>
+          </div>
+        </div>
+        <div class="photo-empty hidden" id="photoEmpty">
+          <svg class="i big" aria-hidden="true"><use href="vendor/icons.svg#images"/></svg>
+          <b data-i18n="ui.addPhotosDocumentsPages"></b>
+          <p data-i18n="ui.dragPhotosHereChooseThem"></p>
+          <button class="btn primary" id="btnPickBig" type="button">
+            <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#images"/></svg><span data-i18n="ui.choosePhotos"></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <div class="splitter" data-pane="photo" role="separator" aria-orientation="vertical" aria-controls="panePhoto" tabindex="0" data-i18n-aria-label="ui.resizePhoto" data-i18n-title="ui.dragResizeWidth"></div>
+
+    <!-- text -->
+    <section class="pane editor-pane" id="paneText" data-i18n-aria-label="editor.pageText">
+      <button class="rail" type="button" data-pane="text" data-i18n-aria-label="ui.showText" data-i18n-title="ui.showText">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-out-line-horizontal"/></svg><span data-i18n="editor.groupText"></span>
+      </button>
+      <!-- phones: this bar is the reading sheet, opened by btnReadSheet -->
+      <div class="pane-head read-bar" id="readBar" role="group" data-i18n-aria-label="ui.reading">
+        <button class="btn ghost small icon-only pane-collapse" type="button" data-pane="text" data-i18n-aria-label="ui.foldText" data-i18n-title="ui.foldText">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-in-line-horizontal"/></svg>
+        </button>
+        <label class="inline-field"><span data-i18n="ui.engine"></span> <select id="engineSel"></select></label>
+        <details class="pop-wrap" id="readPop">
+          <summary class="btn ghost small" data-i18n-title="ui.readingOptions">
+            <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#sliders-horizontal"/></svg><span data-i18n="ui.options"></span>
+          </summary>
+          <div class="pop">
+            <label class="field" id="cleanupWrap"><span data-i18n="ui.photoCleanup"></span>
+              <select id="cleanupSel">
+                <option value="clean" selected data-i18n="ui.clean"></option>
+                <option value="bw" data-i18n="ui.blackWhite"></option>
+                <option value="none" data-i18n="ui.none"></option>
+              </select>
+            </label>
+            <label class="field" id="langsWrap"><span data-i18n="ui.language"></span>
+              <select id="langsSel">
+                <option value="ara+eng" selected data-i18n="ui.arabicEnglish"></option>
+                <option value="ara" data-i18n="ui.arabicOnly"></option>
+              </select>
+            </label>
+            <label class="field"><span data-i18n="ui.pageDirection"></span>
+              <select id="dirSel">
+                <option value="auto" selected data-i18n="ui.automaticText"></option>
+                <option value="rtl" data-i18n="ui.rightLeftArabic"></option>
+                <option value="ltr" data-i18n="ui.leftRightEnglish"></option>
+              </select>
+            </label>
+            <label class="field hidden" id="modelWrap"><span data-i18n="ui.model"></span> <select id="modelSel"></select></label>
+            <label class="check hidden" id="skipWrap"><input type="checkbox" id="skipLetterhead" checked> <span data-i18n="ui.skipOriginalsHeader"></span></label>
+          </div>
+        </details>
+        <button class="btn primary small" id="btnRead" type="button">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#scan"/></svg><span data-i18n="ui.readPage"></span>
+        </button>
+        <button class="btn small" id="btnReadAll" type="button" data-i18n="ui.readUnreadPages"></button>
+        <button class="btn small danger hidden" id="btnStopRead" type="button">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg><span data-i18n="ui.stopReading"></span>
+        </button>
+        <span id="readState" class="read-state muted" role="status"></span>
+        <!-- the page's earlier readings and versions: with the reading controls -->
+        <details class="pop-wrap" id="verPop">
+          <summary class="btn ghost small" data-i18n-title="ui.readingsEarlierVersionsPagesText">
+            <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#clock-counter-clockwise"/></svg><span data-i18n="ui.versions"></span>
+          </summary>
+          <div class="pop ver-pop"><ul id="verList" class="ver-list"></ul></div>
+        </details>
+      </div>
+      <div class="edit-bar">
+        <button class="tb tb-text tb-lead" id="btnReadSheet" type="button" aria-expanded="false" aria-controls="readBar"
+                data-i18n-aria-label="ui.readingReadPageChooseReader"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#scan"/></svg><span data-i18n="ui.reading"></span></button>
+        <div class="fmt-bar" id="fmtBar" role="toolbar" data-i18n-aria-label="ui.textFormatting"></div>
+      </div>
+      <div class="editor-scroll" id="editorScroll">
+        <div id="editor" class="editor sheet" data-i18n-aria-label="editor.pageText"></div>
+      </div>
+      <div class="splitter row" id="flagSplit" data-pane="flags" role="separator" aria-orientation="horizontal" aria-controls="flagsPanel" tabindex="0" data-i18n-aria-label="ui.resizeFlaggedSpotsList" data-i18n-title="ui.dragResizeHeight"></div>
+      <details class="flags" id="flagsPanel" open>
+        <summary>
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#flag"/></svg>
+          <span data-i18n="ui.flaggedSpots"></span> <span id="flagCount" class="pill">0</span>
+          <svg class="i chev" aria-hidden="true"><use href="vendor/icons.svg#caret-down"/></svg>
+        </summary>
+        <div class="flags-tools" id="flagTools">
+          <select id="flagEngine" data-i18n-aria-label="ui.readerRereading"></select>
+          <button class="btn ghost small" id="flagReread" type="button" data-i18n-title="ui.readsEachFlaggedSpotPage">
+            <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#scan"/></svg><span data-i18n="ui.rereadSpots"></span>
+          </button>
+          <button class="btn ghost small hidden" id="flagUseAll" type="button" data-i18n="ui.useAllSuggestions"></button>
+        </div>
+        <ul id="flagList"></ul>
+      </details>
+    </section>
+  </div>
+</main>
+
+<!-- ============================ SETTINGS ============================ -->
+<dialog id="dlgSettings" aria-labelledby="setTitle">
+  <form method="dialog" class="dlg scrolls">
+    <div class="dlg-head">
+      <h2 id="setTitle" data-i18n="ui.settings"></h2>
+      <button class="btn ghost small icon-only" value="cancel" formnovalidate data-i18n-aria-label="ui.close">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
+      </button>
+    </div>
+    <div class="dlg-body">
+    <div class="field">
+      <span id="setLangHead"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#globe"/></svg> <span data-i18n="ui.language"></span></span>
+      <!-- a button per language (web/i18n), named in its own language: app.js showLang -->
+      <div class="seg" id="setLang" role="group" aria-labelledby="setLangHead"></div>
+    </div>
+    <div class="field">
+      <span id="setThemeHead" data-i18n="ui.appearance"></span>
+      <div class="seg theme-seg" id="setTheme" role="group" aria-labelledby="setThemeHead">
+        <button class="btn small" type="button" data-pick="system" aria-pressed="true" data-i18n="ui.system"></button>
+        <button class="btn small" type="button" data-pick="light" aria-pressed="false" data-i18n="ui.light"></button>
+        <button class="btn small" type="button" data-pick="dark" aria-pressed="false" data-i18n="ui.dark"></button>
+      </div>
+    </div>
+    <label class="field"><span data-i18n="ui.nameShownAuthorNotesWord"></span><input id="setAuthor"></label>
+    <fieldset>
+      <legend data-i18n="ui.aiKeys"></legend>
+      <p class="muted small-print" data-i18n="ui.keyGoesServerEachReading"></p>
+      <label class="field"><span data-i18n="ui.claudeApiKey"></span><input id="setClaude" type="password" autocomplete="off" placeholder="sk-ant-…" dir="ltr"></label>
+      <label class="field"><span data-i18n="ui.googleVisionKey"></span><input id="setGoogle" type="password" autocomplete="off" dir="ltr"></label>
+      <label class="check"><input type="checkbox" id="setRemember"> <span data-i18n="ui.rememberKeysDevice"></span></label>
+    </fieldset>
+    <!-- the Windows program only, while Nuqta and EasyOCR are not installed -->
+    <fieldset id="partsBox" class="hidden">
+      <legend data-i18n="ui.extraReaders"></legend>
+      <div class="set-row">
+        <p class="muted small-print" id="partsInfo" role="status"></p>
+        <button class="btn small" id="btnParts" type="button">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#file-arrow-down"/></svg><span data-i18n="app.download"></span>
+        </button>
+      </div>
+    </fieldset>
+    <fieldset id="adminBox">
+      <legend id="tplHead" data-i18n="ui.headerTemplates"></legend>
+      <ul id="tplList" class="tpl-list"></ul>
+      <button class="btn small" id="btnTplNew" type="button">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#plus"/></svg><span data-i18n="ui.addNewTemplate"></span>
+      </button>
+    </fieldset>
+    <fieldset>
+      <legend data-i18n="ui.about"></legend>
+      <!-- the Windows program only: it also checks by itself at start -->
+      <div class="set-row hidden" id="updateBox">
+        <p class="small-print" id="updateInfo" role="status"></p>
+        <button class="btn small" id="btnCheckUpdate" type="button">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-clockwise"/></svg><span id="checkUpdateLabel"></span>
+        </button>
+      </div>
+      <!-- a new window: the Windows program opens it in the browser (pywebview) -->
+      <p class="muted small-print credit"><span data-i18n="ui.developedBy"></span> <a href="https://github.com/eyasbzour?tab=repositories" target="_blank" rel="noopener" dir="ltr">eyasbzour</a></p>
+    </fieldset>
+    </div>
+    <!-- every field saves as it changes, like the theme -->
+    <div class="dlg-actions">
+      <button class="btn primary" value="done" formnovalidate data-i18n="ui.done"></button>
+    </div>
+  </form>
+</dialog>
+
+<!-- use on phone: a link and a password, new each time (server/remote.py) -->
+<dialog id="dlgPhone" aria-labelledby="phoneTitle">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head">
+      <h2 id="phoneTitle" data-i18n="ui.useProgramPhone"></h2>
+      <button class="btn ghost small icon-only" value="cancel" formnovalidate data-i18n-aria-label="ui.close">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
+      </button>
+    </div>
+    <div id="phoneOff" class="phone-text">
+      <p data-i18n="ui.openProgramPhonesBrowserKeep"></p>
+      <p class="muted small-print" data-i18n="ui.connectionEncryptedThroughCloudflareLink"></p>
+    </div>
+    <p id="phoneBusy" class="muted hidden" role="status" data-i18n="ui.settingUpConnectionCanTake"></p>
+    <p id="phoneError" class="phone-error hidden" role="alert"></p>
+    <div id="phoneOn" class="phone-on hidden">
+      <div class="qr" id="phoneQr" role="img" data-i18n-aria-label="ui.qrCodeLink"></div>
+      <ol class="phone-steps">
+        <li><span data-i18n="ui.scanCodePhonesCameraOpen"></span>
+          <span class="copy-row"><code id="phoneUrl" dir="ltr"></code>
+            <button class="btn small" type="button" id="copyUrl"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#copy"/></svg><span data-i18n="ui.copy"></span></button></span></li>
+        <li><span data-i18n="ui.typePassword"></span>
+          <span class="copy-row"><code id="phonePw" class="pw" dir="ltr"></code>
+            <button class="btn small" type="button" id="copyPw"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#copy"/></svg><span data-i18n="ui.copy"></span></button></span></li>
+      </ol>
+    </div>
+    <div class="dlg-actions">
+      <button class="btn primary" type="button" id="phoneStart" data-i18n="app.start"></button>
+      <button class="btn danger hidden" type="button" id="phoneStop" data-i18n="ui.stop"></button>
+      <button class="btn ghost" value="done" formnovalidate data-i18n="ui.done"></button>
+    </div>
+  </form>
+</dialog>
+
+<!-- add a header template (from settings or from the template list) -->
+<dialog id="dlgTpl" aria-labelledby="tplTitle">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head">
+      <h2 id="tplTitle" data-i18n="ui.addHeaderTemplate"></h2>
+      <button class="btn ghost small icon-only" value="cancel" formnovalidate data-i18n-aria-label="ui.close">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
+      </button>
+    </div>
+    <p class="muted small-print" data-i18n="ui.wordFileHeaderFooterPages"></p>
+    <label class="field"><span data-i18n="ui.templateName"></span><input id="tplName" autocomplete="off" data-i18n-placeholder="ui.exampleGeneralDirectorateHeader"></label>
+    <div class="field">
+      <span data-i18n="ui.wordFileDocx"></span>
+      <label class="btn file-btn tpl-file">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#file-arrow-down"/></svg><span id="tplFileName" data-i18n="app.chooseFile"></span>
+        <input type="file" id="tplFile" accept=".docx">
+      </label>
+    </div>
+    <label class="field" id="tplTokenWrap"><span data-i18n="ui.adminCode"></span><input id="tplToken" type="password" autocomplete="off" dir="ltr"></label>
+    <div class="dlg-actions">
+      <button class="btn primary" id="btnTplAdd" type="button">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#plus"/></svg><span data-i18n="ui.addTemplate"></span>
+      </button>
+      <button class="btn ghost" value="cancel" formnovalidate data-i18n="ui.cancel"></button>
+    </div>
+  </form>
+</dialog>
+
+<!-- image editor -->
+<dialog id="dlgImage" class="img-dlg" data-i18n-aria-label="app.editPhoto">
+  <div class="img-ed">
+    <div class="img-ed-tools">
+      <div class="tool-group">
+        <button class="btn small icon-only" type="button" id="ieRotL" data-i18n-title="ui.rotate90Left" data-i18n-aria-label="ui.rotate90LeftLabel">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrow-counter-clockwise"/></svg>
+        </button>
+        <button class="btn small icon-only" type="button" id="ieRotR" data-i18n-title="ui.rotate90Right" data-i18n-aria-label="ui.rotate90RightLabel">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrow-clockwise"/></svg>
+        </button>
+        <label class="inline-field"><span data-i18n="ui.straighten"></span> <input type="range" id="ieFine" min="-20" max="20" step="0.25" value="0"><output id="ieFineVal" class="muted">0°</output></label>
+      </div>
+      <div class="tool-group">
+        <button class="btn small" type="button" id="ieCrop" aria-pressed="false">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#crop"/></svg><span data-i18n="editor.crop"></span>
+        </button>
+        <label class="inline-field"><span data-i18n="ui.brightness"></span> <input type="range" id="ieBright" min="50" max="160" value="100"></label>
+        <label class="inline-field"><span data-i18n="ui.contrast"></span> <input type="range" id="ieContrast" min="50" max="200" value="100"></label>
+        <label class="check"><input type="checkbox" id="ieGray"> <span data-i18n="editor.gray"></span></label>
+      </div>
+      <div class="tool-group">
+        <label class="inline-field"><span data-i18n="ui.zoom"></span> <input type="range" id="ieZoom" min="50" max="400" value="100"></label>
+        <button class="btn ghost small" type="button" id="ieReset" data-i18n="ui.reset"></button>
+      </div>
+      <span class="spacer"></span>
+      <div class="tool-group">
+        <button class="btn ghost small" type="button" id="ieRestore" data-i18n="ui.restoreOriginal"></button>
+        <button class="btn ghost small" type="button" id="ieCancel" data-i18n="ui.cancel"></button>
+        <button class="btn primary small" type="button" id="ieSave">
+          <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#check-circle"/></svg><span data-i18n="photoEditor.savePhoto"></span>
+        </button>
+      </div>
+    </div>
+    <div class="img-ed-stage" id="ieStage">
+      <div class="img-ed-canvas" id="ieCanvasWrap">
+        <canvas id="ieCanvas"></canvas>
+        <div id="ieCropBox" class="crop-box hidden">
+          <span class="h nw" data-h="nw"></span><span class="h ne" data-h="ne"></span>
+          <span class="h sw" data-h="sw"></span><span class="h se" data-h="se"></span>
+          <span class="h n" data-h="n"></span><span class="h s" data-h="s"></span>
+          <span class="h w" data-h="w"></span><span class="h e" data-h="e"></span>
+        </div>
+      </div>
+    </div>
+    <p class="muted small-print img-ed-hint" data-i18n="ui.dragCropFrameCornersStraighten"></p>
+  </div>
+</dialog>
+
+<!-- flagged word: fix the word, see its note and its spot on the photo -->
+<div id="notePop" class="note-pop hidden" role="dialog" data-i18n-aria-label="ui.correctFlaggedSpot">
+  <div class="note-status">
+    <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#flag"/></svg>
+    <span id="noteStatus" class="note-line"></span>
+    <button class="btn ghost small icon-only" id="noteClose" type="button" data-i18n-aria-label="ui.close">
+      <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
+    </button>
+  </div>
+  <canvas id="noteCrop" class="note-crop hidden" role="img" data-i18n-aria-label="ui.spotPagePhoto"></canvas>
+  <label class="field"><span data-i18n="editor.groupText"></span><input id="noteWord" dir="rtl" autocomplete="off" spellcheck="false"></label>
+  <div class="note-reread" id="noteReread">
+    <select id="noteEngine" data-i18n-aria-label="ui.reader"></select>
+    <button class="btn ghost small" id="noteReadBtn" type="button">
+      <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#scan"/></svg><span data-i18n="ui.readSpotWithOther"></span>
+    </button>
+  </div>
+  <button class="suggest hidden" id="noteSuggest" type="button"></button>
+  <textarea id="noteText" class="hidden" rows="3" data-i18n-aria-label="ui.note" data-i18n-placeholder="ui.whySpotFlagged"></textarea>
+  <div class="note-actions">
+    <button class="btn primary small" id="noteSave" type="button" data-i18n="ui.save"></button>
+    <button class="btn ghost small" id="noteRemove" type="button" data-i18n-title="ui.textStaysCorrectedMarkNote">
+      <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#check-circle"/></svg><span data-i18n="ui.saveRemoveFlag"></span>
+    </button>
+  </div>
+</div>
+
+<!-- a line or paragraph of the text: its spot on the photo, and reading it again with another reader -->
+<div id="linePop" class="note-pop line-pop hidden" role="dialog" data-i18n-aria-label="ui.textPagePhoto">
+  <div class="note-status">
+    <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#scan"/></svg>
+    <span class="note-line" data-i18n="ui.onPagePhoto"></span>
+    <span class="line-which seg" id="lineWhich" role="group" data-i18n-aria-label="ui.whatShownRead">
+      <button class="btn ghost small" id="linePickLine" type="button" aria-pressed="true" data-i18n="app.line"></button>
+      <button class="btn ghost small" id="linePickPara" type="button" aria-pressed="false" data-i18n="app.paragraph"></button>
+      <button class="btn ghost small" id="linePickRow" type="button" aria-pressed="false" data-i18n="ui.row"></button>
+    </span>
+    <button class="btn ghost small icon-only" id="lineClose" type="button" data-i18n-aria-label="ui.close">
+      <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
+    </button>
+  </div>
+  <p class="line-why hidden" id="lineWhy"></p>
+  <div class="line-body" id="lineBody">
+    <div class="line-crop"><div class="line-shot"><canvas id="lineCrop" class="hidden" role="img" data-i18n-aria-label="ui.spotPagePhoto"></canvas><span class="line-box hidden" id="lineBox"></span></div></div>
+    <!-- a part of what is shown (or all of it) as a picture in the text, as Select does on the page photo -->
+    <div class="line-pick" id="linePick" role="toolbar" data-i18n-aria-label="ui.photoShown">
+      <button class="btn ghost small" id="linePickPart" type="button" aria-pressed="false" data-i18n-title="ui.dragPhotoAroundPartNeed">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#selection"/></svg><span data-i18n="ui.select"></span>
+      </button>
+      <button class="btn ghost small" id="linePickCopy" type="button"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#copy"/></svg><span data-i18n="ui.copy"></span></button>
+      <button class="btn ghost small" id="linePickInsert" type="button"><svg class="i" aria-hidden="true"><use href="vendor/icons.svg#images"/></svg><span data-i18n="photoEditor.insertText"></span></button>
+    </div>
+    <div class="note-reread">
+      <select id="lineEngine" data-i18n-aria-label="ui.reader"></select>
+      <button class="btn ghost small" id="lineReadBtn" type="button">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#scan"/></svg><span data-i18n="ui.readRowWithOther"></span>
+      </button>
+    </div>
+    <div class="line-result hidden" id="lineResult">
+      <p class="reread-text" id="lineText"></p>
+      <button class="btn primary small" id="lineUse" type="button" data-i18n="app.replaceLine"></button>
+    </div>
+  </div>
+</div>
+
+<!-- the app's own confirm / message box (in place of the browser's) -->
+<dialog id="dlgAsk" class="ask-dlg" aria-labelledby="askText">
+  <form method="dialog" class="dlg">
+    <p id="askText" class="ask-text"></p>
+    <div class="dlg-actions">
+      <button class="btn primary" id="askOk" value="ok" data-i18n="app.continue"></button>
+      <button class="btn ghost" id="askCancel" value="cancel" data-i18n="ui.cancel"></button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+<!-- phones: a <select> with three or more choices opens as this sheet (app.js openSelSheet) -->
+<div id="selSheet" class="sel-sheet hidden" role="dialog" aria-modal="true" aria-labelledby="selTitle">
+  <h3 class="sel-title" id="selTitle"></h3>
+  <div class="sel-list" id="selList" role="listbox" aria-labelledby="selTitle"></div>
+</div>
+
+<script>I18N.apply(document.documentElement);</script>
+<script src="vendor/jszip.min.js"></script>
+<script src="vendor/tiptap.min.js"></script>
+<script src="js/blocks-doc.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/docx-export.js"></script>
+<script src="js/image-editor.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
