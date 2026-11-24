@@ -23,6 +23,7 @@ _state: dict = {"checked": False, "info": None}
 # installing an update: idle, downloading (done of total bytes), installing (the installer runs, the program closes),
 # error; the page shows it on the update bar
 _install: dict = {"state": "idle", "done": 0, "total": 0, "error": ""}
+_cancel = threading.Event()  # the user's Cancel, while it downloads (cancel)
 
 
 def current() -> str:
@@ -82,7 +83,14 @@ def install(quit_app) -> None:
     if not info:
         raise RuntimeError(msg("server.noUpdate"))
     _install.update(state="downloading", done=0, total=info.get("size") or 0, error="")
+    _cancel.clear()
     threading.Thread(target=_install_now, args=(info, quit_app), daemon=True, name="update-install").start()
+
+
+def cancel() -> None:
+    """The user's Cancel: only while it downloads; once the installer runs, the program is closing."""
+    if _install["state"] == "downloading":
+        _cancel.set()
 
 
 def _install_now(info: dict, quit_app) -> None:
@@ -98,8 +106,14 @@ def _download_and_start(info: dict, quit_app) -> None:
     with urllib.request.urlopen(req, timeout=60) as r, open(path, "wb") as f:
         _install["total"] = int(r.headers.get("Content-Length") or 0) or _install["total"]
         while chunk := r.read(1 << 20):
+            if _cancel.is_set():
+                break
             f.write(chunk)
             _install["done"] += len(chunk)
+    if _cancel.is_set():  # cancelled: the half-downloaded installer goes, and the bar offers the update again
+        os.remove(path)
+        _install.update(state="idle", done=0, error="")
+        return
     _install["state"] = "installing"
     # /SILENT shows only progress. The installer waits for the program to close (installer.iss InitializeSetup;
     # quit_app below) and opens it again after (its [Run] entry).

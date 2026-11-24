@@ -139,23 +139,37 @@
     notesBtn.classList.toggle('hidden', !lines.length); openNotes(false);
     notesBtn.onclick = () => openNotes(notesBtn.getAttribute('aria-expanded') !== 'true');
     $('updateLater').onclick = () => { $('updateBar').classList.add('hidden'); openNotes(false); store.set('skipUpdate', u.version); };
-    $('btnUpdate').onclick = async () => {
+    const start = async () => {
       if (!(await ask(tx('app.versionWillDownloadedInstalledProgram', { version: u.version }), { ok: tx('app.update') }))) return;
       if (draft && ws.dirty) await ws.save();
       busy(true); $('updateText').textContent = tx('app.downloadingUpdateProgramWillClose');
       try { await api('/api/update/install', { method: 'POST' }); watch(); } catch (e) { toast(e.message, true); busy(false); }
     };
+    const cancel = async () => {  // the download stops; watch() sees it and offers the update again
+      $('btnUpdate').disabled = true;
+      try { await api('/api/update/cancel', { method: 'POST' }); } catch (e) { toast(e.message, true); $('btnUpdate').disabled = false; }
+    };
+    // while it downloads, the button cancels it (Later waits: the bar has to stay to show the download)
     const busy = (on) => {
-      $('btnUpdate').disabled = on; $('updateLater').disabled = on; $('updateProg').classList.toggle('hidden', !on);
+      const btn = $('btnUpdate');
+      btn.disabled = false; btn.textContent = on ? tx('ui.cancel') : tx('app.updateNow'); btn.onclick = on ? cancel : start;
+      btn.classList.toggle('primary', !on); btn.classList.toggle('ghost', on);
+      $('updateLater').disabled = on; $('updateProg').classList.toggle('hidden', !on);
       if (!on) $('updateText').textContent = tx('app.newVersionProgramAvailable', { version: u.version });
     };
+    if ($('updateProg').classList.contains('hidden')) busy(false);  // shown again (Settings) while it downloads: left as it is
     // the download's share on the bar (server/updater.py), then the installer takes over and the program closes
     const watch = async () => {
       let st;
       try { st = (await api('/api/update')).install; } catch (e) { return; }  // the program is closing
       const prog = $('updateProg');
-      if (!st || st.state === 'error' || st.state === 'idle') { if (st && st.error) toast(I18N.message(st.error), true); busy(false); return; }
-      if (st.state === 'installing') { $('updateText').textContent = tx('app.installingUpdate'); prog.removeAttribute('value'); return; }
+      if (!st || st.state === 'error' || st.state === 'idle') {
+        if (st && st.error) toast(I18N.message(st.error), true); else if (st && st.state === 'idle') toast(tx('app.updateCancelled'));
+        busy(false); return;
+      }
+      if (st.state === 'installing') {  // the installer runs and the program closes: too late to cancel
+        $('updateText').textContent = tx('app.installingUpdate'); prog.removeAttribute('value'); $('btnUpdate').disabled = true; return;
+      }
       if (st.total) {
         prog.value = st.done / st.total;
         $('updateText').textContent = tx('app.downloadingUpdateMb', { done: mb(st.done), total: mb(st.total) });

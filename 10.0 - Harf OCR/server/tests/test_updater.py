@@ -63,3 +63,23 @@ def test_a_failed_download_says_why_and_closes_nothing(monkeypatch, stand_ins):
     updater.install(lambda: closed.append(True))
     st = wait_for("error")
     assert "no network" in str(st["error"].args) and not started and not closed
+
+
+def test_cancel_stops_the_download_and_starts_nothing(monkeypatch, stand_ins, tmp_path):
+    started, closed = stand_ins
+
+    class Slow(Download):  # a chunk at a time, slowly enough to cancel halfway
+        def read(self, n=-1):
+            time.sleep(0.05)
+            return super().read(n)
+
+    monkeypatch.setattr(updater.urllib.request, "urlopen", lambda *a, **k: Slow(b"x" * SIZE))
+    updater.install(lambda: closed.append(True))
+    for _ in range(200):
+        if updater.status()["install"]["done"]:
+            break
+        time.sleep(0.01)
+    updater.cancel()
+    st = wait_for("idle")
+    assert st["error"] == "" and not started and not closed
+    assert not (tmp_path / "HarfOCR-Setup-9.9.9.exe").exists()  # the half-downloaded installer is gone

@@ -164,6 +164,13 @@ def update_install():
     return updater.status()
 
 
+@app.post("/api/update/cancel")
+def update_cancel():
+    """Stops the download; the installer, once it runs, is not stopped."""
+    updater.cancel()
+    return updater.status()
+
+
 QUIT_APP = [lambda: os._exit(0)]  # desktop/app.py replaces it with closing its window
 RESTART_APP = [None]  # desktop/app.py sets it: close, and open again
 SAVE_AS = [None]  # desktop/app.py sets it: Windows' Save As, in the folder saved to last; the path chosen, or None
