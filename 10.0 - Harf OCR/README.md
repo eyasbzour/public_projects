@@ -6,7 +6,7 @@ check the text next to the photo, and produce the file as Word, PDF, ODT, PNG im
 Anything the reader was unsure of is highlighted in the file, with a note saying why.
 
 It runs two ways: as a Windows program (an installer, no browser or server needed) or as a web app on an office server.
-Until version 1.0.2 it was called DocScan; updating from it keeps your drafts and settings.
+The interface comes in Arabic and English.
 
 ![Pages, the photo and its text side by side](docs/screenshots/workspace.png)
 
@@ -42,9 +42,9 @@ Until version 1.0.2 it was called DocScan; updating from it keeps your drafts an
   size from a grid or from typed numbers, and their rows, columns, lines and cell colors can all be changed. Any picture can go
   into the text from a file. Pictures have Word's layout options: in line with the text (drag it to any place in a
   sentence), square, tight, through, top and bottom, behind the text or in front of it (drag it anywhere on the page). They
-  can be resized by their corners, cropped by dragging the edges in (as Word's Crop), taken from the line preview (تحديد, then
-  إدراج في النص or نسخ), and given a border (single, thick, double, dashed or dotted), and they reach Word the same
-  way. Pictures can also be cut from the page photo (a logo, a chart, a signature): press تحديد on the
+  can be resized by their corners, cropped by dragging the edges in (as Word's Crop), taken from the line preview (Select, then
+  Insert in text or Copy), and given a border (single, thick, double, dashed or dotted), and they reach Word the same
+  way. Pictures can also be cut from the page photo (a logo, a chart, a signature): press Select on the
   photo, drag a box around the part, move it if needed, then copy it or put it in the text. A copied part pastes into any
   program at the photo's full resolution. The tools for the
   selected text, table or picture appear right above it, and clicking a highlighted word opens a small panel with its note,
@@ -55,8 +55,8 @@ Until version 1.0.2 it was called DocScan; updating from it keeps your drafts an
 - The **output** uses the chosen header template (header, footer and page setup kept, `{{DATE}}` filled in), the document
   font and size, and real Word lists and headings. Highlighted text keeps its note, as a Word comment in `.docx` and `.odt` and
   as a numbered footnote in PDF and PNG. Formats: `.docx`, PDF, `.odt`, PNG (one image, or a `.zip` for several pages) and `.txt`.
-- "قراءة الكل والإنتاج" reads every unread page and produces the file in **one click**.
-- It works at any browser zoom, from the keyboard alone, and in light and dark themes (الإعدادات > المظهر: follow the system,
+- "Read all and export" reads every unread page and produces the file in **one click**.
+- It works at any browser zoom, from the keyboard alone, and in light and dark themes (Settings > Appearance: follow the system,
   light or dark), with 44 px touch targets on phones.
 
 ## Screenshots
@@ -80,14 +80,15 @@ The pages in these pictures are made-up test letters.
 
 Download `HarfOCR-Setup-<version>.exe` from the [releases](../../releases) and run it. It installs for the current user
 (no administrator rights) with PaddleOCR and Tesseract, and asks whether to add Nuqta and EasyOCR (about 2 GB, downloaded only
-if chosen). If they were skipped, picking either one in the reader list, or الإعدادات > القرّاء الإضافيون, downloads them
-from inside the program. The program opens in its own window; closing it ends it completely. Drafts are kept in `%LOCALAPPDATA%\DocScan` (the folder keeps the old name, so updates find it).
+if chosen). If they were skipped, picking either one in the reader list, or Settings > Extra readers, downloads them
+from inside the program. The program opens in its own window; closing it ends it completely. Drafts are kept in `%LOCALAPPDATA%\DocScan`.
 PDF, ODT and TXT need Microsoft Word or LibreOffice on the computer; Word files (`.docx`) always work.
 
-At start, and from الإعدادات > عن البرنامج, the program checks this repository's latest release and offers to update
-itself, with a list of what changed (ما الجديد؟). Without internet it says nothing at start.
+At start, and from Settings > About, the program checks this repository's latest release and offers to update
+itself, with a list of what changed (What's new?). Update now shows how far the download is, then the program closes,
+installs the new version and opens again. Without internet it says nothing at start.
 
-To use it on a phone from anywhere, press على الهاتف in the top bar. It shows a link, a QR code for it and a password. The
+To use it on a phone from anywhere, press On phone in the top bar. It shows a link, a QR code for it and a password. The
 phone works on the same drafts in its browser while the program stays open on the computer. The link and password are new
 each time, five wrong passwords in a minute lock sign-in for the rest of that minute, and updates, readers and the link itself
 are only controlled from the computer.
@@ -175,8 +176,8 @@ interface: Arabic on a right-to-left page, English on a left-to-right one.
 ## Header templates
 
 A template is any `.docx` whose header and footer you want; its body is replaced by the content. Put `{{DATE}}` in the
-header or footer to have the document date filled in. Add a template from the template list ("إضافة قالب جديد") or from
-**الإعدادات**, or drop `name.docx` and `name.json` (`{"name": "...", "order": 1}`) into the templates folder. The lowest `order` is the default.
+header or footer to have the document date filled in. Add a template from the template list ("Add a new template") or from
+**Settings**, or drop `name.docx` and `name.json` (`{"name": "...", "order": 1}`) into the templates folder. The lowest `order` is the default.
 
 This repository ships only `plain.docx` (a page with the date at the top). Add your office letterhead after installing.
 
