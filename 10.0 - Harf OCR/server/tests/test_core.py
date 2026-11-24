@@ -318,3 +318,34 @@ def test_a_page_is_straightened_only_when_its_rows_are_turned():
         d.rectangle((100, y, 900, y + 18), fill="black")
     assert page_skew(page) == 0
     assert page_skew(page.rotate(4, expand=True, fillcolor="white")) == 4
+
+
+def test_underlined_and_bold_words_keep_their_style():
+    from PIL import Image, ImageDraw, ImageFont
+
+    from engines.emphasis import mark_styles
+
+    img = Image.new("L", (1700, 330), 255)
+    d = ImageDraw.Draw(img)
+    font = ImageFont.load_default(size=40)
+    rows = [("please read the attached report before the meeting", {"attached", "report"}, "u"),
+            ("and send your written comments to the office", {"written", "comments"}, "b"),
+            ("sign here ______________ and return the form", set(), None)]
+    lines = []
+    for k, (text, styled, kind) in enumerate(rows):
+        x, y, words = 40, 40 + 95 * k, []
+        for t in text.split():
+            box = d.textbbox((x, y), t, font=font)
+            d.text((x, y), t, font=font, fill=0, stroke_width=2 if kind == "b" and t in styled else 0, stroke_fill=0)
+            words.append(Word(t, 95, (box[0], y, box[2], y + 52)))
+            x = box[2] + 22
+        marked = [w.box for w in words if w.text in styled]
+        if kind == "u":
+            d.line([(marked[0][0], marked[0][3] - 2), (marked[-1][2], marked[-1][3] - 2)], fill=0, width=3)
+        lines.append(Line(words, words[0].box[0], y, words[-1].box[2], y + 52))
+    mark_styles(lines, img)
+    for ln, (_, styled, kind) in zip(lines, rows):
+        for w in ln.words:
+            assert w.fmt == ({kind: True} if w.text in styled else {}), (w.text, w.fmt)
+    # and they reach the editor as styled pieces, the space after them plain
+    assert words_to_segs(lines[0].words[2:6], 65) == [{"s": "the "}, {"s": "attached report", "u": True}, {"s": " "}, {"s": "before"}]

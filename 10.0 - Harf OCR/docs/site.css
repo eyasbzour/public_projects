@@ -62,6 +62,7 @@ p { margin: 0; text-wrap: pretty; }
 /* top bar */
 .top { display: flex; align-items: center; gap: 2rem; padding-block: 1.1rem; }
 .mark { font: 700 2rem/1 var(--display); color: var(--ink); text-decoration: none; }
+.mark-name { font: 500 1rem/1 var(--body); color: var(--ink-deep); margin-inline-start: .6rem; }  /* the Latin name beside the mark (English page) */
 .top nav { display: flex; gap: 1.6rem; margin-inline-start: auto; font-size: .98rem; }
 .top nav a { color: var(--muted); text-decoration: none; }
 .top nav a:hover { color: var(--ink-deep); }

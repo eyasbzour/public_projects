@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 
-from .common import DIGITS, Line, Word
+from .common import DIGITS, Line, Word, word_spans
 from messages import doc
 
 NUM = re.compile(r"\d+")
@@ -57,22 +57,7 @@ def _splice(mine: list[Word], theirs: list[Word], missing: Counter, h: float) ->
         if any(x.note for x in run):
             runs.append(run)
         run = []
-    # where each of PaddleOCR's words stands: the words of one piece share its box, so it is split by their length
-    at, i = [], 0
-    while i < len(mine):
-        j = i
-        while j < len(mine) and mine[j].box == mine[i].box:
-            j += 1
-        if mine[i].box is None:
-            at += [0.0] * (j - i)
-        else:
-            x0, x1 = mine[i].box[0], mine[i].box[2]
-            n = sum(len(w.text) + 1 for w in mine[i:j])
-            done = 0
-            for w in mine[i:j]:
-                at.append(x1 - (x1 - x0) * (done + len(w.text) / 2) / n)
-                done += len(w.text) + 1
-        i = j
+    at = [(s[0] + s[1]) / 2 if s else 0.0 for s in word_spans(mine)]  # where each of PaddleOCR's words stands
     placed = list(zip(at, mine))
     for run in runs:
         lo, hi = min(w.box[0] for w in run) - h, max(w.box[2] for w in run) + h

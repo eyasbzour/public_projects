@@ -208,7 +208,7 @@ input[type=file] { min-height: 0; padding: .3rem; }
 body.in-draft .topbar { border-bottom-color: transparent; }  /* the title bar and the draft bar read as one toolbar */
 .brand { display: flex; gap: .65rem; align-items: center; font: inherit; font-weight: 600; color: var(--ink); background: none; border: 0; padding: .25rem; cursor: pointer; border-radius: var(--r-ctl); min-width: 0; }
 .brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.brand-mark { display: inline-grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: var(--r-ctl); background: var(--accent-fill); color: var(--accent-ink); flex-shrink: 0; }
+.brand-mark { display: block; width: 1.75rem; height: 1.75rem; flex-shrink: 0; }  /* the app's icon, web/icon.png */
 .topbar-actions { margin-inline-start: auto; display: flex; gap: .25rem; }
 
 /* the app's page is a column: the top bar, any bar under it (an update, readers downloading), then the view in what
@@ -788,7 +788,12 @@ fieldset > .btn { justify-self: start; }  /* a rare action, not a field: its own
   .sheet-gone { visibility: hidden; }  /* pulled away: not seen again while it closes */
   body.read-open .read-bar { z-index: 48; }  /* its own options and versions open over it */
   .tb-pop { z-index: 55; justify-items: center; }  /* the colour and table panels, over the sheet they came from */
-  .sel-sheet { z-index: 58; }  /* a list, over the sheet it is in */
+  .sel-sheet { z-index: 58; max-height: min(55dvh, 26rem); }  /* a list, over the sheet it is in; a long one (text sizes) scrolls */
+  /* every sheet's name, one style: the windows' titles, the menus', the lists' (app.js titleSheet) */
+  :is(.sheet-title, dialog:not(#dlgImage) .dlg-head h2) { display: block; margin: 0 0 .6rem; font-size: var(--fs-md); font-weight: 600;
+    line-height: 1.3; color: var(--ink); text-align: start; }
+  dialog:not(#dlgImage) .dlg-head h2 { margin: 0; }  /* beside its close button */
+  .tb-pop > .sheet-title { justify-self: stretch; }
   /* a menu in a sheet: the full width, a finger's height per row */
   .tb-pop:has(.tb-menu) { justify-items: stretch; }
   .tb-pop .tb-menu { min-width: 0; }
@@ -853,7 +858,7 @@ fieldset > .btn { justify-self: start; }  /* a rare action, not a field: its own
   .tb-lead.busy .i { animation: reading 1.2s ease-in-out infinite; }  /* a page is being read */
   /* a menu: its name, then its tools at full touch size; toggles side by side, the rest one per row with its name */
   .tb-sheet .pop { display: grid; gap: .9rem; }
-  .tb-sheet-title { margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
+
   .tb-sec { display: grid; gap: .4rem; }
   .tb-sec > h5 { margin: 0; font-size: var(--fs-xs); font-weight: 600; color: var(--muted); }
   .tb-sheet .tb-group { border: 0; padding: 0; gap: 4px; }
@@ -866,7 +871,6 @@ fieldset > .btn { justify-self: start; }  /* a rare action, not a field: its own
   .tb-sheet .tb-eye[aria-pressed="true"]::after { content: attr(aria-label) " (مفعّلة)"; }
 
   /* a list as a sheet: its name, then one row per choice; the chosen one ticked */
-  .sel-title { margin: 0 0 .6rem; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
   .sel-list { display: grid; gap: 2px; }
   .sel-group { margin: .6rem 0 .2rem; font-size: var(--fs-xs); color: var(--muted); font-weight: 600; }
   .sel-opt { display: flex; align-items: center; gap: .6rem; min-height: 48px; padding: .5rem .75rem; text-align: start; font: inherit;
@@ -877,6 +881,7 @@ fieldset > .btn { justify-self: start; }  /* a rare action, not a field: its own
 }
 .tb-lead { display: none; }  /* phones only */
 .sel-sheet.hidden { display: none; }
+.sheet-title { display: none; }  /* a sheet's name: phones only (above) */
 @keyframes sheet-up { from { transform: translateY(100%); } }
 @keyframes sheet-down { to { transform: translateY(100%); } }
 @keyframes dim-in { from { opacity: 0; } }

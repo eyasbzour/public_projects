@@ -440,8 +440,9 @@
     };
     document.addEventListener('touchend', end, true); document.addEventListener('touchcancel', end, true);
   }
-  // the pulled sheet alone closes, the way its own close does (Esc closed every sheet open, the one under it too)
-  function closeSheet(el) {
+  // the pulled sheet alone closes, the way its own close does (Esc closed every sheet open, the one under it too).
+  // pulled: it has already slid away under the finger.
+  function closeSheet(el, pulled) {
     const d = el.closest('details');
     if (el.tagName === 'DIALOG') { if (el.dispatchEvent(new Event('cancel', { cancelable: true }))) el.close(); }
     else if (el.id === 'readBar') setReadSheet(false);
@@ -449,7 +450,21 @@
     else if (el.id === 'notePop') closeNote();
     else if (el.id === 'linePop') closeLine();
     else if (el.id === 'colFilter') closeColFilter(true);
-    else if (d) { d.open = false; }  // a menu (.pop) or a toolbar list (.tb-pop): already slid out by the pull
+    else if (el.classList.contains('tb-pop')) el.dispatchEvent(new CustomEvent('sheet-close', { detail: { refocus: !pulled } }));  // editor.js popover
+    else if (d) { if (pulled) d.open = false; else shutPop(d); }  // a menu (.pop), or the text toolbar's menus on phones
+  }
+  // the sheet on top: a list over a menu, a colour panel over the text's menu, a menu over the reading bar. A tap
+  // beside it, its dim, Esc and a pull close that one only, so the one it came from stays.
+  function topSheet() {
+    if (selFor) return $('selSheet');
+    const panel = [...document.querySelectorAll('body > .tb-pop')].filter((x) => !x.classList.contains('sheet-out')).pop();
+    if (panel) return panel;
+    if (noteMark) return $('notePop');
+    if (lineAt) return $('linePop');
+    if (colFilterFor) return $('colFilter');
+    const menu = [...document.querySelectorAll('details.pop-wrap[open]')].filter((d) => !d.querySelector(':scope > .pop.sheet-out')).pop();
+    if (menu) return menu.querySelector(':scope > .pop') || menu;
+    return document.body.classList.contains('read-open') ? $('readBar') : null;
   }
   // sliding on from where the finger left it
   function dismissSheet(el, dy) {
@@ -457,7 +472,7 @@
     const out = el.animate([{ transform: `translateY(${dy}px)` }, { transform: 'translateY(100%)' }],
       { duration: 220, easing: 'cubic-bezier(.32, .72, 0, 1)', fill: 'forwards' });
     out.onfinish = () => {
-      closeSheet(el);
+      closeSheet(el, true);
       el.style.transform = ''; el.classList.add('sheet-gone');
       setTimeout(() => { out.cancel(); el.classList.remove('sheet-gone'); }, 320);  // after its own slide-out, if any
     };
@@ -489,6 +504,15 @@
       else if (el.phoneHome.nextSibling !== el) el.phoneHome.after(el);
     });
   }
+  // phones: every sheet opens with its name, in one style (app.css .sheet-title); a menu without a title of its own
+  // takes its button's name (shown on phones only)
+  function titleSheet(pop, named) {
+    if (!pop || !named) return;
+    const name = named.getAttribute('aria-label') || named.title || named.textContent.trim();
+    const own = pop.querySelector(':scope > .sheet-title');
+    if (!own) { if (name) pop.prepend(el('h3', { class: 'sheet-title auto' }, name)); }
+    else if (own.classList.contains('auto')) own.textContent = name;  // the language may have changed
+  }
   function asSheet(pop) {
     if (!sheets()) return false;
     pop.style.top = pop.style.left = pop.style.right = '';
@@ -501,6 +525,7 @@
     colFilterFor = k;
     pop.dataset.col = k;
     for (const inp of pop.querySelectorAll('input')) inp.value = draftFilter[inp.dataset.col];
+    titleSheet(pop, pop);
     slideIn(pop); pop.classList.remove('hidden');
     // under the header, its right edge on the header's (the page is right to left), kept inside the list
     if (!asSheet(pop)) {
@@ -550,6 +575,7 @@
   async function openDraft(id) {
     // straight from another draft (back / forward, a link): save it and close its editor first, as going home does
     if (draft && ws.dirty) await ws.save();
+    closeColFilter(false);  // the list's search, left open: its dim would cover the draft
     destroyEditor();
     try { draft = await api('/api/drafts/' + id); }
     catch (e) { toast(tx('app.couldntOpenDraft', { error: e.message }), true); location.hash = ''; return; }
@@ -1774,11 +1800,12 @@
     $('noteWord').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveNote(false); } });
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && draft) { e.preventDefault(); ws.save(); }
-      if (e.key === 'Escape') {
-        if (selFor) { closeSelSheet(true); return; }  // a list over a sheet: just the list
-        closeNote(); closeLine(); closeColFilter(true);
-        document.querySelectorAll('details.pop-wrap[open]').forEach((d) => { shutPop(d); d.querySelector('summary').focus(); });
-        if (document.body.classList.contains('read-open')) { setReadSheet(false); $('btnReadSheet').focus(); }
+      if (e.key === 'Escape') {  // the window on top only: a list over a menu closes, the menu stays
+        const top = topSheet(); if (!top) return;
+        closeSheet(top);
+        const d = top.closest('details');
+        if (d && !top.classList.contains('tb-pop')) d.querySelector('summary').focus();
+        else if (top.id === 'readBar') $('btnReadSheet').focus();
       }
     });
 
@@ -1800,11 +1827,17 @@
     document.addEventListener('toggle', (e) => {  // toggle does not bubble; this listens on the way down
       const d = e.target;
       if (!(d.matches && d.matches('details.pop-wrap') && d.open)) return;
+      titleSheet(d.querySelector(':scope > .pop'), d.querySelector(':scope > summary'));
       slideIn(d.querySelector(':scope > .pop') || d);
       pops().forEach((o) => { if (o !== d && !o.contains(d)) shutPop(o); });  // one at a time
     }, true);
     const closePops = (e) => {
       if (e.target.closest && e.target.closest('#selSheet')) return;  // a list over a sheet: the sheet stays
+      if (sheets()) {  // phones: the sheet on top closes, unless the tap is in it; the one under it stays
+        const top = topSheet();
+        if (top && !top.contains(e.target) && !(top.id === 'readBar' && e.target.closest('#btnReadSheet'))) closeSheet(top);
+        return;
+      }
       if (selFor) closeSelSheet(false);
       if (document.body.classList.contains('read-open') && !e.target.closest('#readBar, #btnReadSheet')) setReadSheet(false);
       pops().forEach((d) => { if (d.open && !d.contains(e.target)) shutPop(d); });

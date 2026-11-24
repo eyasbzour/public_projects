@@ -15,6 +15,8 @@ from .common import EngineError, Word, low_note, seg_lists, to_jpeg
 from messages import doc, msg, render
 
 MARK = re.compile(r"\[\[(.*?)\|\|(.*?)\]\]", re.S)
+TAG = re.compile(r"<(/?)(b|i|u|s)>")  # how a word is printed, in Claude's text (prompt rule 9)
+TAG_FMT = {"b": "b", "i": "i", "u": "u", "s": "x"}  # to the segments' keys (blocks-doc.js)
 TYPE_MAP = {"heading": "h", "paragraph": "p", "bullet": "li", "center": "c", "table": "table",
             "h": "h", "p": "p", "li": "li", "c": "c"}
 
@@ -43,21 +45,50 @@ Rules:
 5. If a printed word is unclear (blurred, under a stamp, cut off), write your best reading as [[reading||short reason, in the page's language]]. If you cannot read it at all write [[…||{ar["unreadable"]}: reason]] or [[…||{en["unreadable"]}: reason]].
 6. If something in the original looks wrong (for example numbers that do not add up), keep the original text and wrap it as [[text||description of the issue, in the page's language]].
 7. Tables: use type "table" with "rows" (a list of rows, each a list of cell strings, header row first) and no "text".
-8. Use type "center" for centered lines such as closings or titles, "heading" for section titles, "bullet" for bulleted items, otherwise "paragraph". Set "bold" when the line is printed in bold.
+8. Use type "center" for centered lines such as closings or titles, "heading" for section titles, "bullet" for bulleted items, otherwise "paragraph". Set "bold" when the whole line is printed in bold.
+9. Inside the text, wrap words printed bold, italic, underlined or struck through in <b>...</b>, <i>...</i>, <u>...</u> or <s>...</s> (they can nest). Only what is printed that way; a whole bold line is "bold" instead.
 
 Reply with JSON only, no code fences, in exactly this shape:
 {{"blocks":[{{"type":"heading|paragraph|bullet|center|table","bold":false,"text":"...","rows":[["..."]]}}],"notes":[{{"anchor":"...","note":"..."}}]}}"""
 
 
-def _text_to_segs(text: str) -> list[dict]:
-    segs, pos = [], 0
-    for m in MARK.finditer(text or ""):
-        if m.start() > pos:
-            segs.append({"s": text[pos:m.start()]})
-        segs.append({"s": m.group(1), "note": m.group(2).strip() or doc("doc.uncertain")})
+def _styled(text: str) -> tuple[str, list[dict]]:
+    """The text without its <b> <i> <u> <s> tags, and each character's format ({"b": True, ...})."""
+    plain, fmts, on, pos = [], [], {}, 0
+    for m in TAG.finditer(text):
+        for ch in text[pos:m.start()]:
+            plain.append(ch)
+            fmts.append(dict(on))
+        key = TAG_FMT[m.group(2)]
+        if m.group(1):
+            on.pop(key, None)
+        else:
+            on[key] = True
         pos = m.end()
-    if pos < len(text or ""):
-        segs.append({"s": text[pos:]})
+    for ch in text[pos:]:
+        plain.append(ch)
+        fmts.append(dict(on))
+    return "".join(plain), fmts
+
+
+def _text_to_segs(text: str) -> list[dict]:
+    text, fmts = _styled(text or "")
+    segs, pos = [], 0
+
+    def plain(a, b):  # one segment per run of the same format
+        while a < b:
+            e = a
+            while e < b and fmts[e] == fmts[a]:
+                e += 1
+            segs.append({"s": text[a:e], **fmts[a]})
+            a = e
+    for m in MARK.finditer(text):
+        plain(pos, m.start())
+        a, b = m.span(1)
+        common = {k: True for k in fmts[a] if all(f.get(k) for f in fmts[a:b])} if b > a else {}  # one note, one piece
+        segs.append({"s": m.group(1), **common, "note": m.group(2).strip() or doc("doc.uncertain")})
+        pos = m.end()
+    plain(pos, len(text))
     return [s for s in segs if s["s"] or s.get("note")]
 
 
@@ -69,13 +100,14 @@ def _attach_note(blocks: list[dict], anchor: str, note: str) -> None:
             for i, sg in enumerate(segs):
                 if sg.get("note") is None and anchor in sg["s"]:
                     a = sg["s"].index(anchor)
+                    fmt = {k: v for k, v in sg.items() if k != "s"}  # the pieces keep how the text is printed
                     parts = []
                     if a:
-                        parts.append({"s": sg["s"][:a]})
-                    parts.append({"s": anchor, "note": note})
+                        parts.append({"s": sg["s"][:a], **fmt})
+                    parts.append({"s": anchor, **fmt, "note": note})
                     rest = sg["s"][a + len(anchor):]
                     if rest:
-                        parts.append({"s": rest})
+                        parts.append({"s": rest, **fmt})
                     segs[i:i + 1] = parts
                     return
                 if sg.get("note") is not None and anchor in sg["s"]:

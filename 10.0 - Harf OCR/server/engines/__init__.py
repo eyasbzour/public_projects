@@ -9,7 +9,7 @@ from typing import Callable
 
 from . import direction as ltr_page
 from .common import EngineError, each_box, in_language, lines_to_blocks, load_image, page_skew, seg_lists, unturn_box  # noqa: F401
-from .emphasis import mark_bold
+from .emphasis import mark_bold, mark_styles
 from .lists import mark_list_items
 from .marks import split_marks
 from .numbers import check_numbers
@@ -177,6 +177,7 @@ def _read(engine_id, image_bytes, *, rotation, cleanup, api_key, model, skip_let
     lines, marks = split_marks(lines, colour, img.size, low_conf)
     lines = mark_list_items(lines, img)  # bullets and numbers, even when the reader skipped the bullet
     lines = mark_bold(lines, img)  # which short lines are headings
+    lines = mark_styles(lines, img, colour)  # bold, italic, underlined and coloured words, and highlights
     return done(lines_to_blocks(lines, low_conf, grids, img.size, marks))
 
 

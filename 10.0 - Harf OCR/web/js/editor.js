@@ -789,6 +789,8 @@
         if (again || (!get() && !always)) return;
         const pop = document.createElement('div');
         pop.className = 'tb-pop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', btn.getAttribute('aria-label'));
+        const title = document.createElement('h4'); title.className = 'sheet-title'; title.textContent = btn.getAttribute('aria-label');
+        pop.append(title);  // shown on phones, where the panel is a sheet (app.css)
         build(pop);
         document.body.append(pop);
         if (!phone()) {
@@ -801,11 +803,14 @@
         }
         btn.setAttribute('aria-expanded', 'true');
         open = { btn, pop };
+        pop.addEventListener('sheet-close', (e) => { if (open && open.pop === pop) { closePop(); if (e.detail && e.detail.refocus) btn.focus(); } });  // app.js closeSheet
         const first = pop.querySelector('button, input'); if (first) first.focus({ preventScroll: true });
       });
     };
-    document.addEventListener('pointerdown', (e) => { if (open && !open.pop.contains(e.target) && !open.btn.contains(e.target)) closePop(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) { const b = open.btn; closePop(); b.focus(); } });
+    // phones: app.js closes the sheet on top (this panel, or the list over it) on a tap beside it or on its dim
+    document.addEventListener('pointerdown', (e) => { if (open && !phone() && !open.pop.contains(e.target) && !open.btn.contains(e.target)) closePop(); });
+    // Esc closes this panel only: the sheet it came from stays (app.js would close the next one down)
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) { const b = open.btn; closePop(); b.focus(); e.stopImmediatePropagation(); } });
 
     // Word's standard colours and their light tints
     const COLORS = [['#c00000', tx('editor.darkRed')], ['#ff0000', tx('editor.red')], ['#ffc000', tx('editor.orange')], ['#ffff00', tx('editor.yellow')], ['#92d050', tx('editor.lightGreen')],
@@ -1059,7 +1064,7 @@
       const caret = icon('caret-down'); caret.classList.add('tb-caret');
       sum.append(icon(ic), caret);  // ▾: it opens a menu
       const body = document.createElement('div'); body.className = 'pop'; body.setAttribute('role', 'group'); body.setAttribute('aria-label', label);
-      const h = document.createElement('h4'); h.className = 'tb-sheet-title'; h.textContent = label;
+      const h = document.createElement('h4'); h.className = 'sheet-title'; h.textContent = label;
       d.append(sum, body);
       // a choice closes it (alignment, a list, an insert); the text's look stays open, to set more than one
       if (once) body.addEventListener('click', (ev) => { const b = ev.target.closest('.tb'); if (b && !b.hasAttribute('aria-haspopup')) closeDrops(); });

@@ -179,6 +179,7 @@ class Word:
     conf: float  # 0-100
     box: tuple[float, float, float, float] | None = None  # x0, y0, x1, y1 on the image that was read
     note: str | None = None  # a reason to check this word other than low confidence (numbers.py)
+    fmt: dict = field(default_factory=dict)  # how it is printed (emphasis.py): b, i, u, c colour, bg highlight
 
 
 @dataclass
@@ -190,6 +191,28 @@ class Line:
     y1: float
     new_para: bool = False
     extra: dict = field(default_factory=dict)
+
+
+def word_spans(words: list[Word]) -> list[tuple[float, float] | None]:
+    """Where each word of a line stands, right to left: (x0, x1). The words of one piece share its box (PaddleOCR
+    boxes a run of words), so that box is split by their length; a word without a box has no span."""
+    out: list[tuple[float, float] | None] = []
+    i = 0
+    while i < len(words):
+        j = i
+        while j < len(words) and words[j].box == words[i].box:
+            j += 1
+        if words[i].box is None:
+            out += [None] * (j - i)
+        else:
+            x0, x1 = words[i].box[0], words[i].box[2]
+            n = sum(len(w.text) + 1 for w in words[i:j]) - 1
+            done = 0
+            for w in words[i:j]:
+                out.append((x1 - (x1 - x0) * (done + len(w.text)) / n, x1 - (x1 - x0) * done / n))
+                done += len(w.text) + 1
+        i = j
+    return out
 
 
 def clean_word(text: str) -> str:
@@ -209,16 +232,20 @@ def words_to_segs(words: list[Word], low_conf: float, size: tuple[int, int] | No
     segs: list[dict] = []
     buf: list[str] = []
     low: list[Word] = []
+    fmt: dict = {}  # how the words in buf and low are printed (Word.fmt): a change starts a new segment
 
     def flush_plain():
         if buf:
-            segs.append({"s": " ".join(buf) + " "})
+            if fmt:  # the space after styled words stays plain, so an underline stops at the last word
+                segs.extend([{"s": " ".join(buf), **fmt}, {"s": " "}])
+            else:
+                segs.append({"s": " ".join(buf) + " "})
             buf.clear()
 
     def flush_low(note: str | None = None):
         if low:
             text = " ".join(w.text for w in low)
-            seg = {"s": text, "note": note or low_note(min(w.conf for w in low))}
+            seg = {"s": text, **fmt, "note": note or low_note(min(w.conf for w in low))}
             if size and all(w.box for w in low):
                 W, H = size
                 seg["box"] = [round(min(w.box[0] for w in low) / W, 4), round(min(w.box[1] for w in low) / H, 4),
@@ -228,6 +255,10 @@ def words_to_segs(words: list[Word], low_conf: float, size: tuple[int, int] | No
             low.clear()
 
     for w in words:
+        if w.fmt != fmt:
+            flush_plain()
+            flush_low()
+            fmt = w.fmt
         if w.note:  # flagged for its own reason: a segment of its own with that note
             flush_plain()
             flush_low()
@@ -471,7 +502,7 @@ def lines_to_blocks(lines: list[Line], low_conf: float, tables: list = (), size:
         if words and (words[0].text in BULLETS or words[0].text[:1] in BULLETS):
             first = words[0]
             rest = first.text[1:].strip()
-            words = ([Word(rest, first.conf, first.box)] if rest else []) + words[1:]
+            words = ([Word(rest, first.conf, first.box, first.note, first.fmt)] if rest else []) + words[1:]
             lens[0] -= len(first.text) - len(rest) + (0 if rest else 1)
             btype = "li"
         align = page_align(para, left, right)

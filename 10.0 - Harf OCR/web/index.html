@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
 <title data-i18n="ui.titleShort"></title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%230066d6%27/%3E%3Cpath d=%27M9 8h14M9 13h14M9 18h14M9 23h9%27 stroke=%27white%27 stroke-width=%272.5%27/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="icon.png">
 <script src="js/theme.js"></script>
 <!-- the interface language (js/i18n.js); all.js (the default and every web/i18n file) comes from the server (main.py) -->
 <script src="js/i18n.js"></script>
@@ -15,7 +15,7 @@
 
 <header class="topbar">
   <button class="brand" id="brand" type="button" data-i18n-aria-label="ui.home">
-    <span class="brand-mark" aria-hidden="true"><svg class="i"><use href="vendor/icons.svg#scan"/></svg></span>
+    <img class="brand-mark" src="icon.png" alt="" width="28" height="28">
     <span class="brand-name" data-i18n="ui.titleFull"></span>
   </button>
   <div class="topbar-actions">
@@ -582,7 +582,7 @@
 
 <!-- phones: a <select> with three or more choices opens as this sheet (app.js openSelSheet) -->
 <div id="selSheet" class="sel-sheet hidden" role="dialog" aria-modal="true" aria-labelledby="selTitle">
-  <h3 class="sel-title" id="selTitle"></h3>
+  <h3 class="sheet-title" id="selTitle"></h3>
   <div class="sel-list" id="selList" role="listbox" aria-labelledby="selTitle"></div>
 </div>
 

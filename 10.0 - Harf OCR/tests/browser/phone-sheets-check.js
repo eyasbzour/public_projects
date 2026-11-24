@@ -71,6 +71,37 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
   await pull(195, r.y + 10, r.y + 260);
   check('the paragraph sheet closes when pulled down', await until(() => !document.querySelector('details.tb-sheet[open]')));
 
+  // ---- sheets over sheets: the dim, Esc and a pull close the one on top, and the one under it stays
+  const dim = () => page.touchscreen.tap(195, 12);
+  const paraOpen = () => page.evaluate(() => !!document.querySelector('details.tb-sheet[open] > .pop:not(.sheet-out)'));
+  const panelOpen = () => page.evaluate(() => [...document.querySelectorAll('body > .tb-pop')].some((x) => !x.classList.contains('sheet-out')));
+  const overPara = async () => {
+    if (!(await paraOpen())) { await page.tap('summary[aria-label="الفقرة"]'); await page.waitForTimeout(500); }
+    await page.tap(`${sheet} button[aria-label="حدود الفقرة"]`); await page.waitForTimeout(500);
+  };
+  await overPara();
+  await dim(); await page.waitForTimeout(700);
+  check('a tap on the dim closes the borders menu only', !(await panelOpen()) && await paraOpen());
+  await overPara();
+  r = await rect('.tb-pop');
+  await pull(195, r.y + 10, r.y + 260); await page.waitForTimeout(900);
+  check('the borders menu pulled down stays closed, the paragraph sheet stays', !(await panelOpen()) && await paraOpen());
+  await overPara();
+  await page.keyboard.press('Escape'); await page.waitForTimeout(700);
+  check('Esc closes the borders menu only', !(await panelOpen()) && await paraOpen(), JSON.stringify({ panel: await panelOpen(), para: await paraOpen(), focus: await page.evaluate(() => document.activeElement && document.activeElement.outerHTML.slice(0, 80)) }));
+  await dim(); await page.waitForTimeout(700);
+  check('then the dim closes the paragraph sheet', !(await paraOpen()));
+  // the text size list: over its sheet, short and scrolled inside
+  const sizeIn = await page.evaluate(() => { const d = document.querySelector('.tb-size').closest('details'); return d && d.querySelector('summary').getAttribute('aria-label'); });
+  await page.tap(`summary[aria-label="${sizeIn}"]`); await page.waitForTimeout(500);
+  await page.tap('details.tb-sheet[open] .tb-size'); await page.waitForTimeout(600);
+  const list = await page.$eval('#selSheet', (n) => ({ h: n.getBoundingClientRect().height, scrolls: n.scrollHeight > n.clientHeight + 4, open: !n.classList.contains('hidden') }));
+  check('the text size list is a short sheet that scrolls', list.open && list.h <= 0.56 * 844 && list.scrolls, JSON.stringify(list));
+  await shot('size-list');
+  await dim(); await page.waitForTimeout(700);
+  check('a tap on the dim closes the list only', await page.$eval('#selSheet', (n) => n.classList.contains('hidden')) && await paraOpen());
+  await dim(); await page.waitForTimeout(700);
+
   // ---- a picture: its tools above it, crop with a finger
   await page.tap('summary[aria-label="إدراج والسطر"]'); await page.waitForTimeout(400);
   await page.tap('details.tb-sheet[open] button[aria-label="إدراج صورة"]'); await page.waitForTimeout(400);

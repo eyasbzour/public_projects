@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title data-i18n="signIn.pageTitle"></title>
+<link rel="icon" type="image/png" href="icon.png">
 <!-- the phone's way in (server/remote.py): the password shown on the PC gives this browser a session -->
 <script src="js/theme.js"></script>
 <script src="js/i18n.js"></script>
@@ -21,7 +22,7 @@
 </head>
 <body>
 <form class="phone-in" id="form">
-  <span class="brand-mark" aria-hidden="true"><svg class="i"><use href="vendor/icons.svg#scan"/></svg></span>
+  <img class="brand-mark" src="icon.png" alt="" width="28" height="28">
   <h1 data-i18n="ui.titleFull"></h1>
   <label class="field"><span data-i18n="signIn.passwordShownComputersScreen"></span>
     <input id="pw" required autocomplete="off" autocapitalize="none" spellcheck="false" dir="ltr" inputmode="text">

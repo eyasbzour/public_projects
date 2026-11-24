@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@700&family=Readex+Pro:wght@400;500;600&display=block">
+<style>
+  /* The link preview card (1200x630) for docs/og.png, in the website's colours (docs/site.css) */
+  html, body { margin: 0; }
+  .og {
+    width: 1200px; height: 630px; box-sizing: border-box; overflow: hidden; position: relative;
+    background: oklch(97.4% 0.008 262); color: oklch(23% 0.06 268);
+    display: grid; grid-template-columns: 580px 1fr; align-items: center;
+    font-family: "Readex Pro", sans-serif;
+  }
+  .text { padding-inline: 64px 0; }
+  .name { font: 700 190px/1 "Amiri", serif; color: oklch(36% 0.14 268); margin: 0 0 18px; transform: translateY(-10px); }
+  .ar { font-size: 36px; font-weight: 600; line-height: 1.35; margin: 0 0 14px; }
+  .en { font-size: 24px; white-space: nowrap; font-weight: 400; color: oklch(47% 0.035 265); margin: 0; direction: ltr; text-align: right; }
+  .shot {
+    position: absolute; inset-inline-start: 630px; top: 80px; width: 760px; border-radius: 14px;
+    border: 1px solid oklch(87% 0.025 262); box-shadow: 0 30px 70px oklch(36% 0.14 268 / 0.22);
+  }
+</style></head>
+<body><div class="og">
+  <div class="text">
+    <p class="name">حرف</p>
+    <p class="ar">برنامج OCR عربي مجاني<br>من الصورة إلى Word وPDF</p>
+    <p class="en">Harf OCR: free Arabic OCR for Windows</p>
+  </div>
+  <img class="shot" src="../../docs/screenshots/workspace.png" alt="">
+</div></body></html>
