@@ -12,7 +12,6 @@ import json
 import os
 import re
 import secrets
-import shutil
 import time
 import uuid
 import zipfile
@@ -23,11 +22,11 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFil
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from PIL import Image, ImageOps
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import convert
+from drafts import DraftError, DraftStore
 import engines
 from messages import Msg, language_file, languages, msg, payload, to_json
 import parts
@@ -35,11 +34,10 @@ import remote
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("DOCSCAN_DATA", ROOT / "data"))
-DRAFTS = DATA / "drafts"
 TEMPLATES = Path(os.environ.get("DOCSCAN_TEMPLATES", ROOT / "templates"))
 WEB = ROOT / "web"
-for d in (DRAFTS, TEMPLATES):
-    d.mkdir(parents=True, exist_ok=True)
+TEMPLATES.mkdir(parents=True, exist_ok=True)
+STORE = DraftStore(DATA / "drafts")
 
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")      # optional shared password for the whole app
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")        # needed to add/remove templates (if set)
@@ -49,8 +47,6 @@ CONVERT_SLOTS = asyncio.Semaphore(int(os.environ.get("MAX_CONVERT_JOBS", "2")))
 MAX_UPLOAD = 25 * 1024 * 1024
 CLAUDE_MODELS = os.environ.get("CLAUDE_MODELS", "claude-sonnet-5-5,claude-opus-5-5,claude-haiku-5-5").split(",")
 
-ID_RE = re.compile(r"^[a-f0-9]{32}$")
-IMG_RE = re.compile(r"^[a-f0-9]{32}\.jpg$")
 TPL_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,60}$")
 
 class Reply(JSONResponse):
@@ -156,14 +152,15 @@ def update_check():
 
 
 @app.post("/api/update/install")
-async def update_install():
+def update_install():
+    """Starts it: the download runs on, /api/update says how far (install), then the program closes for the installer."""
     if not DESKTOP:
         return refuse(msg("server.updatingOnlyAvailableWindowsProgram"), 404)
     try:
-        await run_in_threadpool(updater.install, QUIT_APP[0])
+        updater.install(QUIT_APP[0])
     except Exception as e:
         return refuse(msg("server.couldntUpdate", error=e), 502)
-    return {"ok": True}
+    return updater.status()
 
 
 QUIT_APP = [lambda: os._exit(0)]  # desktop/app.py replaces it with closing its window
@@ -251,15 +248,15 @@ async def remote_login(request: Request):
 @app.get("/api/engines")
 def list_engines(request: Request):
     out = []
-    for e in engines.ENGINES:
-        ok, why = engines.availability(e["id"])
-        server_key = bool((e["key"] == "claude" and os.environ.get("ANTHROPIC_API_KEY")) or
-                          (e["key"] == "google" and os.environ.get("GOOGLE_VISION_API_KEY")))
+    for r in engines.READERS:
+        ok, why = engines.availability(r.id)
         # Nuqta and EasyOCR come as one download in the Windows program (parts.py)
-        installable = not ok and e["id"] in ("nuqta", "easyocr") and parts.offered() and not remote.is_remote(request.scope)
+        installable = not ok and r.download and parts.offered() and not remote.is_remote(request.scope)
         if installable and parts.status()["state"] == "restart":
             installable, why = False, msg("server.downloadCompleteRestartProgramReader")
-        out.append({**e, "available": ok, "reason": why or None, "serverKey": server_key, "installable": installable})
+        out.append({"id": r.id, "label": r.label, "group": r.group, "key": r.key, "cleanup": r.cleanup,
+                    "available": ok, "reason": why or None, "serverKey": bool(r.key_env and os.environ.get(r.key_env)),
+                    "installable": installable})
     return {"engines": out, "claudeModels": CLAUDE_MODELS, "lowConfidence": LOW_CONF}
 
 
@@ -276,7 +273,7 @@ async def ocr(
     langs: str = Form("ara+eng"),
     direction: str = Form("auto"),
 ):
-    path = _image_path(draft_id, image)
+    path = STORE.image(draft_id, image)
     if cleanup not in ("none", "clean", "bw"):
         cleanup = "clean"
     data = path.read_bytes()
@@ -316,7 +313,7 @@ async def ocr_spots(
         assert spots and all(len(b) == 4 and 0 <= b[0] < b[2] <= 1 and 0 <= b[1] < b[3] <= 1 for b in spots)
     except Exception:
         return refuse(msg("server.invalidSpots"), 422)
-    data = _image_path(draft_id, image).read_bytes()
+    data = STORE.image(draft_id, image).read_bytes()
     t0 = time.time()
     async with OCR_SLOTS:
         try:
@@ -332,129 +329,51 @@ async def ocr_spots(
     return {"results": results, "engine": engine, "seconds": round(time.time() - t0, 1)}
 
 
-# ------------------------------------------------------------------ drafts
-def _draft_dir(draft_id: str) -> Path:
-    if not ID_RE.match(draft_id or ""):
-        _err(400, msg("server.invalidDraftId"))
-    return DRAFTS / draft_id
-
-
-def _load(draft_id: str) -> dict:
-    f = _draft_dir(draft_id) / "draft.json"
-    if not f.exists():
-        _err(404, msg("server.draftNotFound"))
-    return json.loads(f.read_text(encoding="utf8"))
-
-
-def _save(d: dict) -> None:
-    dd = _draft_dir(d["id"])
-    dd.mkdir(parents=True, exist_ok=True)
-    tmp = dd / "draft.json.tmp"
-    tmp.write_text(json.dumps(d, ensure_ascii=False), encoding="utf8")
-    tmp.replace(dd / "draft.json")
-
-
-def _image_path(draft_id: str, name: str) -> Path:
-    if not IMG_RE.match(name or ""):
-        _err(400, msg("server.invalidPhotoName"))
-    p = _draft_dir(draft_id) / "images" / name
-    if not p.exists():
-        _err(404, msg("server.photoNotFound"))
-    return p
-
-
-# the drafts list's line for each draft.json, by its path, with the file's (mtime, size) it was read at: a draft file
-# holds every page's text and versions, so it is read again only when it changed
-_SUMMARIES: dict[Path, tuple[tuple[int, int], dict]] = {}
+# ------------------------------------------------------------------ drafts (server/drafts.py)
+@app.exception_handler(DraftError)
+async def _draft_error(request: Request, exc: DraftError):
+    return refuse(exc.message, exc.status, **exc.extra)
 
 
 @app.get("/api/drafts")
 def list_drafts():
-    items, seen = [], set()
-    for f in DRAFTS.glob("*/draft.json"):
-        try:
-            st = f.stat()
-            stamp = (st.st_mtime_ns, st.st_size)
-            hit = _SUMMARIES.get(f)
-            if not hit or hit[0] != stamp:
-                d = json.loads(f.read_text(encoding="utf8"))
-                hit = _SUMMARIES[f] = (stamp, {"id": d["id"], "name": d.get("name", ""), "owner": d.get("owner", ""),
-                                               "updated": d.get("updated", 0), "pages": len(d.get("pages", []))})
-        except Exception:
-            continue
-        seen.add(f)
-        items.append(hit[1])
-    for gone in set(_SUMMARIES) - seen:  # deleted drafts
-        _SUMMARIES.pop(gone, None)  # another request may have dropped it already
-    items.sort(key=lambda x: -x["updated"])
-    return {"drafts": items}
+    return {"drafts": STORE.list()}
 
 
 @app.post("/api/drafts")
 def create_draft(body: dict = Body(...)):
-    now = time.time()
     tpls = list_templates()["templates"]  # sorted: first one is the default
-    d = {"id": uuid.uuid4().hex, "name": str(body.get("name") or msg("ui.newDraft"))[:200],
-         "owner": str(body.get("owner") or "")[:100], "created": now, "updated": now, "version": 1,
-         "template": body.get("template") or (tpls[0]["id"] if tpls else ""), "date": body.get("date") or "", "pages": []}
-    _save(d)
-    return d
+    return STORE.create(name=str(body.get("name") or msg("ui.newDraft")), owner=str(body.get("owner") or ""),
+                        template=body.get("template") or (tpls[0]["id"] if tpls else ""), date=body.get("date") or "")
 
 
 @app.get("/api/drafts/{draft_id}")
 def get_draft(draft_id: str):
-    return _load(draft_id)
+    return STORE.get(draft_id)
 
 
 @app.put("/api/drafts/{draft_id}")
 def put_draft(draft_id: str, body: dict = Body(...)):
-    cur = _load(draft_id)
-    if int(body.get("version", 0)) != int(cur.get("version", 0)):
-        return refuse(msg("server.someoneElseEditedDraftOpen"), 409, current=cur)
-    keep = {"id": cur["id"], "created": cur.get("created")}
-    d = {**body, **keep, "updated": time.time(), "version": int(cur.get("version", 0)) + 1}
-    _save(d)
-    return {"version": d["version"], "updated": d["updated"]}
+    return STORE.save(draft_id, body)
 
 
 @app.delete("/api/drafts/{draft_id}")
 def delete_draft(draft_id: str):
-    dd = _draft_dir(draft_id)
-    if dd.exists():
-        shutil.rmtree(dd)
+    STORE.delete(draft_id)
     return {"ok": True}
 
 
 @app.post("/api/drafts/{draft_id}/images")
 def upload_image(draft_id: str, file: UploadFile = File(...)):
-    dd = _draft_dir(draft_id)
-    if not (dd / "draft.json").exists():
-        _err(404, msg("server.draftNotFound"))
     raw = file.file.read(MAX_UPLOAD + 1)
     if len(raw) > MAX_UPLOAD:
         _err(413, msg("server.photoTooLargeLimitMb", limit=MAX_UPLOAD // 1024 ** 2))
-    try:
-        img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw)))
-        if img.mode in ("RGBA", "LA", "PA") or (img.mode == "P" and "transparency" in img.info):
-            # a pasted screenshot or logo with see-through parts: on white paper, not black
-            img = img.convert("RGBA")
-            paper = Image.new("RGB", img.size, "white")
-            paper.paste(img, mask=img.getchannel("A"))
-            img = paper
-        else:
-            img = img.convert("RGB")
-    except Exception:
-        _err(400, msg("server.fileIsntValidImage"))
-    img.thumbnail((3200, 3200))
-    name = uuid.uuid4().hex + ".jpg"
-    (dd / "images").mkdir(exist_ok=True)
-    img.save(dd / "images" / name, "JPEG", quality=90)
-    return {"name": name, "width": img.width, "height": img.height}
+    return STORE.add_image(draft_id, raw)
 
 
 @app.get("/api/drafts/{draft_id}/images/{name}")
 def get_image(draft_id: str, name: str):
-    return FileResponse(_image_path(draft_id, name), media_type="image/jpeg",
+    return FileResponse(STORE.image(draft_id, name), media_type="image/jpeg",
                         headers={"Cache-Control": "private, max-age=86400"})
 
 

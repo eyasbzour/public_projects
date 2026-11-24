@@ -138,6 +138,7 @@ input, select, textarea {
 /* lists look the same in every browser (Safari draws its own grey box): a field like the others, its arrow at the end */
 select:not([multiple]) { appearance: none; -webkit-appearance: none; padding-inline-end: 2rem;
   background-image: var(--chev); background-repeat: no-repeat; background-position: left .6rem center; background-size: .9rem; }
+select:not([multiple]):dir(ltr) { background-position: right .6rem center; }  /* the arrow at the end, where the padding is */
 input:hover, select:hover, textarea:hover { border-color: color-mix(in oklch, var(--line-strong), var(--ink) 25%); }
 input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); box-shadow: 0 0 0 5px oklch(from var(--accent) l c h / .16); }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: .85; }
@@ -365,7 +366,7 @@ body.resizing iframe, body.resizing img { pointer-events: none; }
 }
 .pages.drag { outline: 2px dashed var(--accent); outline-offset: -6px; }
 /* wraps in a narrow pane: label, then the menu at full width, then the re-sort button */
-.order-row { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; padding: .5rem .75rem 0; }
+.order-row { display: flex; flex-wrap: wrap; gap: .35rem; align-items: flex-end; padding: .5rem .75rem 0; }  /* the sort button beside the list, also when the label wraps above it */
 .order-row .inline-field { flex: 1 1 8rem; min-width: 0; flex-wrap: wrap; }
 .order-row select { flex: 1 1 9.5rem; min-width: 0; max-width: 100%; min-height: 2rem; padding-block: .2rem; }
 .page-list { list-style: none; margin: 0; padding: .6rem; display: grid; gap: .35rem; overflow-y: auto; align-content: start; flex: 1; }

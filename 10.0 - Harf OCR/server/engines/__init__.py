@@ -4,6 +4,8 @@ from __future__ import annotations
 from . import ai_engines, easyocr_engine, nuqta_engine, paddle_engine, tesseract_engine
 import io
 import os
+from dataclasses import dataclass
+from typing import Callable
 
 from . import direction as ltr_page
 from .common import EngineError, each_box, in_language, lines_to_blocks, load_image, page_skew, seg_lists, unturn_box  # noqa: F401
@@ -18,38 +20,93 @@ from messages import msg
 # so they get their own threshold for flagging.
 BOX_ENGINE_LOW_CONF = float(os.environ.get("BOX_ENGINE_LOW_CONFIDENCE", "35"))
 
-ENGINES = [
+
+@dataclass
+class Job:
+    """One reading: what was asked, and what the pipeline found before the reader's own steps."""
+    img: object  # the page as the reader takes it (cleaned up for Tesseract, else as photographed)
+    langs: str
+    spot: bool
+    api_key: str | None
+    model: str | None
+    skip_letterhead: bool
+    low_conf: float
+    unruled: object = None  # the page with its table rules taken out (free readers)
+    ltr: bool = False
+    grids: tuple = ()
+    clean: Callable[[], object] | None = None  # loads the page cleaned up for Tesseract
+
+
+@dataclass(frozen=True)
+class Reader:
+    """A way to read a page. read(job) gives lines with their words' boxes, for the shared layout step (tables,
+    parts, paragraphs), or blocks already laid out (blocks=True: the AI readers)."""
+    id: str
+    label: object  # a message, or a name that needs none
+    group: str  # "free" | "ai"
+    available: Callable[[], tuple[bool, str]]
+    read: Callable[[Job], list]
+    key: str | None = None  # the API key it needs: "claude" | "google"
+    key_env: str | None = None  # the server's own key for it, when set (ai_engines)
+    blocks: bool = False
+    cleanup: bool = False  # takes the cleaned-up page and the languages chosen (Tesseract's options)
+    low_conf: float | None = None  # its own flag threshold: its confidence runs lower than Tesseract's
+    download: bool = False  # the Windows program can download it (parts.py)
+    refine: Callable[[list, Job], list] | None = None  # its own steps on its lines, before the layout
+
+
+def _paddle_refine(lines: list, job: Job) -> list:
+    if job.ltr:  # an English page: PaddleOCR's English recognizer reads it far better, but not its Arabic words
+        return paddle_engine.with_arabic(paddle_engine.run(job.img, "en"), lines)
+    if job.spot or not tesseract_engine.available("best", job.langs)[0]:
+        return lines
+    # PaddleOCR drops digits inside Arabic lines: Tesseract reads the page too, for the numbers (numbers.py).
+    # Only a check: when Tesseract fails or runs out of time, the page keeps PaddleOCR's reading.
+    clean = job.clean()
+    try:
+        second = tesseract_engine.run(find_tables(clean)[1], "best", job.langs)
+    except EngineError as e:
+        print(f"number check skipped: {e}")
+        return lines
+    return check_numbers(lines, second, clean.width / job.img.width, job.grids)
+
+
+def _tesseract(model: str, label) -> Reader:
+    # it reads table cells only without the table's lines
+    return Reader(f"tess-{model}", label, "free", lambda: tesseract_engine.available(model),
+                  lambda j: tesseract_engine.run(j.unruled, model, j.langs, j.spot), cleanup=True)
+
+
+# the module's function is looked up when called (lambda), so a test can stand in for it
+READERS = [
     # best first: the first one the server has is the default. PaddleOCR is the user's pick after testing, and it
     # reads tables best. Known weakness (test pages): it kept 18/34 numbers, against 30 for Tesseract "best" and 33
     # for EasyOCR, because its Arabic model drops Western digits inside Arabic lines ("م ض / 245 / 2026") at high
-    # confidence, so they are not flagged.
-    {"id": "paddle", "label": msg("reader.paddleocrRecommended"), "group": "free", "key": None},
+    # confidence, so they are not flagged: _paddle_refine checks them against Tesseract.
+    Reader("paddle", msg("reader.paddleocrRecommended"), "free", lambda: paddle_engine.available(),
+           lambda j: paddle_engine.run(j.img), low_conf=BOX_ENGINE_LOW_CONF, refine=_paddle_refine),
     # the most accurate for Arabic, also for numbers and some handwriting, but about a minute a page on a CPU:
     # the default second opinion for flagged words and paragraphs (nuqta_engine.py)
-    {"id": "nuqta", "label": msg("reader.nuqtaMostAccurateArabicSlower"), "group": "free", "key": None},
-    {"id": "tess-best", "label": msg("reader.tesseractBest"), "group": "free", "key": None},
-    {"id": "easyocr", "label": "EasyOCR", "group": "free", "key": None},
-    {"id": "tess-standard", "label": msg("reader.tesseractStandard"), "group": "free", "key": None},
-    {"id": "tess-fast", "label": msg("reader.tesseractFast"), "group": "free", "key": None},
-    {"id": "claude", "label": msg("reader.claudeAi"), "group": "ai", "key": "claude"},
-    {"id": "google", "label": "Google Vision", "group": "ai", "key": "google"},
+    Reader("nuqta", msg("reader.nuqtaMostAccurateArabicSlower"), "free", lambda: nuqta_engine.available(),
+           lambda j: nuqta_engine.run(j.img, j.spot), low_conf=BOX_ENGINE_LOW_CONF, download=True),
+    _tesseract("best", msg("reader.tesseractBest")),
+    Reader("easyocr", "EasyOCR", "free", lambda: easyocr_engine.available(),
+           lambda j: easyocr_engine.run(j.img), low_conf=BOX_ENGINE_LOW_CONF, download=True),
+    _tesseract("standard", msg("reader.tesseractStandard")),
+    _tesseract("fast", msg("reader.tesseractFast")),
+    Reader("claude", msg("reader.claudeAi"), "ai", lambda: ai_engines.claude_available(),
+           lambda j: ai_engines.run_claude(j.img, j.api_key, j.model, j.skip_letterhead),
+           key="claude", key_env=ai_engines.CLAUDE_KEY_ENV, blocks=True),
+    Reader("google", "Google Vision", "ai", lambda: ai_engines.google_available(),
+           lambda j: ai_engines.run_google(j.img, j.api_key, j.low_conf),
+           key="google", key_env=ai_engines.GOOGLE_KEY_ENV, blocks=True),
 ]
+BY_ID = {r.id: r for r in READERS}
 
 
 def availability(engine_id: str) -> tuple[bool, str]:
-    if engine_id.startswith("tess-"):
-        return tesseract_engine.available(engine_id[5:])
-    if engine_id == "easyocr":
-        return easyocr_engine.available()
-    if engine_id == "paddle":
-        return paddle_engine.available()
-    if engine_id == "nuqta":
-        return nuqta_engine.available()
-    if engine_id == "claude":
-        return ai_engines.claude_available()
-    if engine_id == "google":
-        return ai_engines.google_available()
-    return False, msg("server.unknownReader")
+    r = BY_ID.get(engine_id)
+    return r.available() if r else (False, msg("server.unknownReader"))
 
 
 def run(engine_id: str, image_bytes: bytes, *, rotation: int = 0, cleanup: str = "clean",
@@ -71,45 +128,34 @@ def run(engine_id: str, image_bytes: bytes, *, rotation: int = 0, cleanup: str =
 def _read(engine_id, image_bytes, *, rotation, cleanup, api_key, model, skip_letterhead, low_conf, langs, spot,
           direction) -> tuple[list[dict], bool]:
     """The blocks, and whether the page runs left to right."""
-    if engine_id not in {e["id"] for e in ENGINES}:
+    r = BY_ID.get(engine_id)
+    if not r:
         raise EngineError(msg("server.unknownReader"))
     ok, why = availability(engine_id)
     if not ok:
         raise EngineError(why)
     # Clean-up (grayscale, contrast, upscale) is tuned for Tesseract. The neural engines resize on their
     # own and do worse on it: PaddleOCR drops the digits of "الرقم: 245 / 2026" on the cleaned image.
-    mode = cleanup if engine_id.startswith("tess-") else "none"
+    mode = cleanup if r.cleanup else "none"
     img = load_image(image_bytes, rotation, mode)
-    if engine_id in ("claude", "google"):
-        blocks = (ai_engines.run_claude(img, api_key, model, skip_letterhead and not spot) if engine_id == "claude"
-                  else ai_engines.run_google(img, api_key, low_conf))
+    job = Job(img, langs, spot, api_key, model, skip_letterhead and not spot, low_conf)
+    if r.blocks:
+        blocks = r.read(job)
         return blocks, direction == "ltr" or (direction == "auto" and ltr_page.is_ltr_text(ltr_page.blocks_text(blocks)))
     # free engines: lines with word positions -> one shared layout step (tables, side-by-side parts, paragraphs)
     page = img if mode == "none" else load_image(image_bytes, rotation, "none")
     skew = 0.0 if spot else page_skew(page)
     if skew:  # a photo taken at an angle: its lines run into each other. Read it straight; the boxes go back after.
         rotation += skew
-        img = load_image(image_bytes, rotation, mode)
-    grids, unruled = find_tables(img)
-    if engine_id.startswith("tess-"):
-        lines = tesseract_engine.run(unruled, engine_id[5:], langs, spot)  # it reads table cells only without the lines
-    else:
-        lines = nuqta_engine.run(img, spot) if engine_id == "nuqta" else (easyocr_engine if engine_id == "easyocr" else paddle_engine).run(img)
+        img = job.img = load_image(image_bytes, rotation, mode)
+    grids, job.unruled = find_tables(img)
+    lines = r.read(job)
     ltr = direction == "ltr" or (direction == "auto" and ltr_page.is_ltr(lines))
-    if ltr and engine_id == "paddle":  # an English page: PaddleOCR's English recognizer reads it far better,
-        lines = paddle_engine.with_arabic(paddle_engine.run(img, "en"), lines)  # but not its Arabic words
-    if engine_id in ("paddle", "easyocr", "nuqta"):
-        low_conf = min(low_conf, BOX_ENGINE_LOW_CONF)
-        if engine_id == "paddle" and not ltr and not spot and tesseract_engine.available("best", langs)[0]:
-            # PaddleOCR drops digits inside Arabic lines: Tesseract reads the page too, for the numbers (numbers.py).
-            # Only a check: when Tesseract fails or runs out of time, the page keeps PaddleOCR's reading.
-            clean = load_image(image_bytes, rotation, "clean")
-            try:
-                second = tesseract_engine.run(find_tables(clean)[1], "best", langs)
-            except EngineError as e:
-                print(f"number check skipped: {e}")
-            else:
-                lines = check_numbers(lines, second, clean.width / img.width, grids)
+    job.ltr, job.grids, job.clean = ltr, grids, lambda: load_image(image_bytes, rotation, "clean")
+    if r.refine:
+        lines = r.refine(lines, job)
+    if r.low_conf is not None:
+        low_conf = min(low_conf, r.low_conf)
     colour = None
     if ltr:  # the layout steps work right to left: mirror the page for them, and back after (direction.py)
         W = img.width

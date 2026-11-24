@@ -98,8 +98,10 @@ def page_skew(img: Image.Image, limit: float = 10) -> float:
         m = cv2.getRotationMatrix2D((w / 2, h / 2), a, 1)
         return float(np.var(cv2.warpAffine(ink, m, (w, h)).sum(axis=1)))
 
-    best = max(np.arange(-limit, limit + 0.01, 0.5), key=score)
-    best = max(np.arange(best - 0.4, best + 0.41, 0.1), key=score)
+    # on a tie the straighter angle: a page with no rows of text (blank, a picture) scores the same at every angle,
+    # and was turned by the first one tried (10 degrees)
+    best = max(np.arange(-limit, limit + 0.01, 0.5), key=lambda a: (score(a), -abs(a)))
+    best = max(np.arange(best - 0.4, best + 0.41, 0.1), key=lambda a: (score(a), -abs(a)))
     # cv2 turns counterclockwise for a positive angle, load_image's rotation clockwise
     return 0.0 if abs(best) < 0.5 else round(-float(best), 1)
 

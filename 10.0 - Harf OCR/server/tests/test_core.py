@@ -304,3 +304,17 @@ def test_tesseract_models_in_a_folder_with_a_space(tmp_path):
     ImageDraw.Draw(img).text((40, 50), "HELLO WORLD 2026", fill="black", font_size=48)
     words = [w.text for ln in tesseract_engine._read(img, "eng", str(models), 6) for w in ln.words]
     assert "2026" in words
+
+
+def test_a_page_is_straightened_only_when_its_rows_are_turned():
+    from PIL import Image, ImageDraw
+
+    from engines.common import page_skew
+
+    assert page_skew(Image.new("RGB", (1000, 600), "white")) == 0  # no rows to line up: left as it is
+    page = Image.new("RGB", (1000, 1400), "white")
+    d = ImageDraw.Draw(page)
+    for y in range(100, 1300, 60):
+        d.rectangle((100, y, 900, y + 18), fill="black")
+    assert page_skew(page) == 0
+    assert page_skew(page.rotate(4, expand=True, fillcolor="white")) == 4

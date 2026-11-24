@@ -20,6 +20,9 @@ from messages import msg
 REPO = os.environ.get("DOCSCAN_UPDATE_REPO", "eyasbzour/harf-ocr")
 NOTES = re.compile(r"<!-- whats-new -->(.*?)<!-- /whats-new -->", re.S)  # release.yml writes these
 _state: dict = {"checked": False, "info": None}
+# installing an update: idle, downloading (done of total bytes), installing (the installer runs, the program closes),
+# error; the page shows it on the update bar
+_install: dict = {"state": "idle", "done": 0, "total": 0, "error": ""}
 
 
 def current() -> str:
@@ -67,20 +70,39 @@ def check_now() -> dict:
 
 
 def status() -> dict:
-    return {"current": current(), "checked": _state["checked"], "update": _state["info"]}
+    return {"current": current(), "checked": _state["checked"], "update": _state["info"], "install": dict(_install)}
 
 
 def install(quit_app) -> None:
-    """Download the newer installer and start it; then close the program (quit_app) so it can be replaced."""
+    """Start downloading the newer installer (status() says how far); then it starts and the program closes (quit_app)
+    so it can be replaced."""
+    if _install["state"] in ("downloading", "installing"):
+        return
     info = _state["info"] or check()
     if not info:
         raise RuntimeError(msg("server.noUpdate"))
+    _install.update(state="downloading", done=0, total=info.get("size") or 0, error="")
+    threading.Thread(target=_install_now, args=(info, quit_app), daemon=True, name="update-install").start()
+
+
+def _install_now(info: dict, quit_app) -> None:
+    try:
+        _download_and_start(info, quit_app)
+    except Exception as e:
+        _install.update(state="error", error=msg("server.couldntUpdate", error=e))
+
+
+def _download_and_start(info: dict, quit_app) -> None:
     path = os.path.join(tempfile.gettempdir(), f"HarfOCR-Setup-{info['version']}.exe")
     req = urllib.request.Request(info["url"], headers={"User-Agent": "HarfOCR-updater"})
     with urllib.request.urlopen(req, timeout=60) as r, open(path, "wb") as f:
+        _install["total"] = int(r.headers.get("Content-Length") or 0) or _install["total"]
         while chunk := r.read(1 << 20):
             f.write(chunk)
-    # /SILENT shows only progress; the installer closes and reopens the program (RestartApplications).
+            _install["done"] += len(chunk)
+    _install["state"] = "installing"
+    # /SILENT shows only progress. The installer waits for the program to close (installer.iss InitializeSetup;
+    # quit_app below) and opens it again after (its [Run] entry).
     # Its log goes next to the program's (desktop/app.py), to see why an update did not install.
     log = os.path.join(os.environ.get("LOCALAPPDATA", tempfile.gettempdir()), "DocScan", "logs", "setup.log")
     subprocess.Popen([path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS",

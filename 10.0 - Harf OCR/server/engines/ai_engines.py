@@ -117,6 +117,10 @@ def parse_claude_json(raw: str) -> list[dict]:
     return blocks
 
 
+# the server's own keys, used when a user has entered none (README: settings)
+CLAUDE_KEY_ENV, GOOGLE_KEY_ENV = "ANTHROPIC_API_KEY", "GOOGLE_VISION_API_KEY"
+
+
 def claude_available() -> tuple[bool, str]:
     if not find_spec("anthropic"):  # looked up, not imported: listing the readers stays instant
         return False, msg("server.anthropicLibraryIsntInstalledServer")
@@ -126,7 +130,7 @@ def claude_available() -> tuple[bool, str]:
 def run_claude(img, api_key: str | None, model: str, skip_letterhead: bool) -> list[dict]:
     import anthropic
 
-    key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+    key = api_key or os.environ.get(CLAUDE_KEY_ENV)
     if not key:
         raise EngineError(msg("server.enterClaudeApiKeySettings"))
     data = base64.b64encode(to_jpeg(img, 2000)).decode()
@@ -162,7 +166,7 @@ def google_available() -> tuple[bool, str]:
 def run_google(img, api_key: str | None, low_conf: float) -> list[dict]:
     import httpx
 
-    key = api_key or os.environ.get("GOOGLE_VISION_API_KEY")
+    key = api_key or os.environ.get(GOOGLE_KEY_ENV)
     if not key:
         raise EngineError(msg("server.enterGoogleVisionKeySettings"))
     body = {"requests": [{

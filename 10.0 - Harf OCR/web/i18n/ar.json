@@ -11,6 +11,8 @@
   "app.versionWillDownloadedInstalledProgram": "سيُنزَّل الإصدار {version} ويُثبَّت، ثم يُفتح البرنامج من جديد. يُحفظ عملك أولاً.",
   "app.update": "تحديث",
   "app.downloadingUpdateProgramWillClose": "جارٍ تنزيل التحديث… سيُغلق البرنامج ويُفتح من جديد.",
+  "app.downloadingUpdateMb": "تنزيل التحديث… {done} من {total} ميجابايت",
+  "app.installingUpdate": "جارٍ تثبيت التحديث… سيُغلق البرنامج ويُفتح من جديد.",
   "app.phoneOn": "على الهاتف: يعمل",
   "app.phone": "على الهاتف",
   "app.tryAgain": "إعادة المحاولة",

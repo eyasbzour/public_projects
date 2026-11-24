@@ -17,6 +17,7 @@ const inView = (box, items) => {
 (async () => {
   const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
   const errors = [], ids = [];
+  try {
   for (const [w, h] of [[1440, 900], [390, 844]]) {
     const page = await browser.newPage({ viewport: { width: w, height: h } });
     page.on('pageerror', (e) => errors.push(e.message));
@@ -43,9 +44,11 @@ const inView = (box, items) => {
     check(`${w}px: with the update bar and its notes open nothing is cut off`, after.page <= after.win + 1 && (w < 700 || after.home <= 1), JSON.stringify(after));
     await page.close();
   }
-  const page = await browser.newPage();
-  for (const id of ids) await page.request.delete(`${BASE}/api/drafts/${id}`);
   check('no script errors', !errors.length, errors.join(' | '));
+  } finally {  // what it added, it deletes, also after a crash
+    const page = await browser.newPage();
+    for (const id of ids) await page.request.delete(`${BASE}/api/drafts/${id}`);
+  }
   await browser.close();
   console.log(fails ? `${fails} FAILED` : 'all passed');
   process.exit(fails ? 1 : 0);

@@ -1,5 +1,5 @@
 // Stop reading ends a reading in progress (one page, or "read unread pages"), and an update that has started can't
-// be put off with "later". The server's replies are held back here, so no reader or update is needed.
+// be put off with "later" and shows how far its download is. The server's replies are held back here, so no reader or update is needed.
 // node stop-read-check.js [base]
 const { chromium } = require('playwright-core');
 const path = require('path');
@@ -54,13 +54,28 @@ async function seed(api) {
   check('nothing left reading', !(await stopShown()) && !(await page.$('.page-item .busy')));
 
   // the update bar: "later" can't hide an update that is installing
-  await page.route('**/api/update', (r) => r.fulfill({ json: { current: '1.0.5', checked: true, update: { version: '9.9.9', notes: '' } } }));
-  await page.route('**/api/update/install', () => {});  // held: the program would close
+  // the download as the server would report it: idle, then half way, then the installer running
+  const MB = 1 << 20;
+  let install = { state: 'idle', done: 0, total: 0, error: '' };
+  const update = { version: '9.9.9', notes: '' };
+  await page.route('**/api/update', (r) => r.fulfill({ json: { current: '1.0.5', checked: true, update, install } }));
+  await page.route('**/api/update/install', (r) => {
+    install = { state: 'downloading', done: 125 * MB, total: 250 * MB, error: '' };
+    r.fulfill({ json: { current: '1.0.5', checked: true, update, install } });
+  });
   await page.evaluate(() => localStorage.removeItem('ds.skipUpdate'));
   await page.reload(); await page.waitForSelector('#updateBar:not(.hidden)', { timeout: 10000 });
   check('later works before updating', !(await page.isDisabled('#updateLater')));
   await page.click('#btnUpdate'); await page.click('#askOk'); await page.waitForTimeout(300);
   check('later is disabled once the update starts', await page.isDisabled('#updateLater') && await page.isDisabled('#btnUpdate'));
+  await page.waitForTimeout(800);
+  check('the download shows how far it is', await page.isVisible('#updateProg')
+    && Math.abs(await page.$eval('#updateProg', (e) => e.value) - 0.5) < 0.01
+    && /125.*250/.test(await page.textContent('#updateText')), await page.textContent('#updateText'));
+  install = { state: 'installing', done: 250 * MB, total: 250 * MB, error: '' };
+  await page.waitForTimeout(800);
+  check('then it says the installer runs', !(await page.$eval('#updateProg', (e) => e.hasAttribute('value')))
+    && !/125/.test(await page.textContent('#updateText')));
   check('no script errors', !errors.length, errors.join(' | '));
   await page.request.delete(`${BASE}/api/drafts/${id}`);
   await browser.close();

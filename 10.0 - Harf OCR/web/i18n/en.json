@@ -11,6 +11,8 @@
   "app.versionWillDownloadedInstalledProgram": "Version {version} will be downloaded and installed, then the program opens again. Your work is saved first.",
   "app.update": "Update",
   "app.downloadingUpdateProgramWillClose": "Downloading the update… The program will close and open again.",
+  "app.downloadingUpdateMb": "Downloading the update… {done} of {total} MB",
+  "app.installingUpdate": "Installing the update… The program will close and open again.",
   "app.phoneOn": "On phone: on",
   "app.phone": "On phone",
   "app.tryAgain": "Try again",

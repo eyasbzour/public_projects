@@ -82,15 +82,16 @@
     return out;
   }
 
+  // a paragraph's own attributes: [the block's name, the editor's, a number], one table for both directions, so one
+  // added to only one side can't be dropped on save. box: where it sits on the photo, to read it again with another
+  // engine; lines: each of its lines, [x0, y0, x1, y1, where its text starts]
+  var PARA_ATTRS = [['box', 'box'], ['lines', 'lines'], ['lh', 'lineHeight', true], ['sb', 'spaceBefore', true],
+    ['sa', 'spaceAfter', true], ['bd', 'borders']];
+
   function textNode(type, b, segs, bold, extra) {
     var n = { type: type, attrs: Object.assign({ textAlign: (b.dir === 'ltr' ? TO_EDITOR_LTR : TO_EDITOR)[b.align] || null }, extra || {}) };
-    if (b.box) n.attrs.box = b.box;  // where it sits on the photo, to read it again with another engine
-    if (b.lines) n.attrs.lines = b.lines;  // and each of its lines: [x0, y0, x1, y1, where its text starts]
+    PARA_ATTRS.forEach(function (a) { if (b[a[0]] != null) n.attrs[a[1]] = b[a[0]]; });
     if (b.dir === 'ltr') n.attrs.dir = 'ltr';
-    if (b.lh) n.attrs.lineHeight = b.lh;
-    if (b.sb != null) n.attrs.spaceBefore = b.sb;
-    if (b.sa != null) n.attrs.spaceAfter = b.sa;
-    if (b.bd) n.attrs.borders = b.bd;
     var content = inline(segs, bold);
     if (content.length) n.content = content;
     return n;
@@ -210,14 +211,21 @@
     var ltr = node && node.attrs && node.attrs.dir === 'ltr';
     var a = node && node.attrs && (ltr ? FROM_EDITOR_LTR : FROM_EDITOR)[node.attrs.textAlign];
     if (a) b.align = a;
-    if (node && node.attrs && node.attrs.box) b.box = node.attrs.box;
-    if (node && node.attrs && node.attrs.lines) b.lines = node.attrs.lines;
     if (ltr) b.dir = 'ltr';
-    if (node && node.attrs && node.attrs.lineHeight) b.lh = +node.attrs.lineHeight;
-    if (node && node.attrs && node.attrs.spaceBefore != null) b.sb = +node.attrs.spaceBefore;
-    if (node && node.attrs && node.attrs.spaceAfter != null) b.sa = +node.attrs.spaceAfter;
-    if (node && node.attrs && node.attrs.borders) b.bd = node.attrs.borders;
+    if (node && node.attrs) {
+      PARA_ATTRS.forEach(function (x) { var v = node.attrs[x[1]]; if (v != null) b[x[0]] = x[2] ? +v : v; });
+    }
     return b;
+  }
+
+  // every run of segs in the blocks: each paragraph's, and each table cell's (server: engines/common.py seg_lists)
+  function segLists(blocks) {
+    var out = [];
+    (blocks || []).forEach(function (b) {
+      if (b.type === 'table') (b.rows || []).forEach(function (r) { r.forEach(function (c) { out.push(c || []); }); });
+      else out.push(b.segs || []);
+    });
+    return out;
   }
 
   function docToBlocks(doc) {
@@ -286,5 +294,5 @@
     return out;
   }
 
-  return { blocksToDoc: blocksToDoc, docToBlocks: docToBlocks, segsToInline: inline, startDir: startDir };
+  return { blocksToDoc: blocksToDoc, docToBlocks: docToBlocks, segsToInline: inline, startDir: startDir, segLists: segLists };
 });
