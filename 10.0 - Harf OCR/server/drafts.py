@@ -17,6 +17,7 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
+import sheet
 from messages import Msg, msg
 
 ID_RE = re.compile(r"^[a-f0-9]{32}$")
@@ -99,8 +100,9 @@ class DraftStore:
         if dd.exists():
             shutil.rmtree(dd)
 
-    def add_image(self, draft_id: str, raw: bytes) -> dict:
-        """A photo for the draft, as sent: {name, width, height} of the JPEG kept."""
+    def add_image(self, draft_id: str, raw: bytes, fit: bool = False) -> dict:
+        """A photo for the draft, as sent: {name, width, height} of the JPEG kept. fit: a sheet photographed on a
+        desk is cut out and flattened (sheet.py), and the photo as taken is kept too, as "original"."""
         dd = self._dir(draft_id)
         if not (dd / "draft.json").exists():
             raise DraftError(404, msg("server.draftNotFound"))
@@ -117,10 +119,17 @@ class DraftStore:
         except Exception:
             raise DraftError(400, msg("server.fileIsntValidImage")) from None
         img.thumbnail((MAX_SIDE, MAX_SIDE))
-        name = uuid.uuid4().hex + ".jpg"
         (dd / "images").mkdir(exist_ok=True)
-        img.save(dd / "images" / name, "JPEG", quality=90)
-        return {"name": name, "width": img.width, "height": img.height}
+
+        def keep(im) -> str:
+            name = uuid.uuid4().hex + ".jpg"
+            im.save(dd / "images" / name, "JPEG", quality=90)
+            return name
+        corners = sheet.find_sheet(img) if fit else None
+        if corners is None:
+            return {"name": keep(img), "width": img.width, "height": img.height}
+        original, flat = keep(img), sheet.flatten(img, corners)
+        return {"name": keep(flat), "width": flat.width, "height": flat.height, "original": original}
 
     def image(self, draft_id: str, name: str) -> Path:
         if not IMG_RE.match(name or ""):

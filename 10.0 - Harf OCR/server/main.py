@@ -12,6 +12,7 @@ import json
 import os
 import re
 import secrets
+import subprocess
 import time
 import uuid
 import zipfile
@@ -91,7 +92,7 @@ async def password_gate(request: Request, call_next):
 # what a phone may reach before signing in: the sign-in page and what it draws with
 PHONE_OPEN = ("/phone.html", "/api/remote/login", "/css/app.css", "/js/theme.js", "/vendor/icons.svg",
               "/js/i18n.js", "/i18n/all.js")
-PC_ONLY = ("/api/remote", "/api/update", "/api/parts", "/api/restart", "/api/lang")  # the program's own controls
+PC_ONLY = ("/api/remote", "/api/update", "/api/parts", "/api/restart", "/api/lang", "/api/save-as", "/api/saved")  # the program's own controls
 
 
 @app.middleware("http")
@@ -165,6 +166,34 @@ def update_install():
 
 QUIT_APP = [lambda: os._exit(0)]  # desktop/app.py replaces it with closing its window
 RESTART_APP = [None]  # desktop/app.py sets it: close, and open again
+SAVE_AS = [None]  # desktop/app.py sets it: Windows' Save As, in the folder saved to last; the path chosen, or None
+SAVED: set[str] = set()  # the files saved so: the only ones /api/saved/open opens
+
+
+@app.post("/api/save-as")
+def save_as(file: UploadFile = File(...), name: str = Form(...)):
+    """An exported file, saved where the user picks (the Windows program; elsewhere the browser downloads it)."""
+    if not SAVE_AS[0]:
+        return refuse(msg("server.onlyAvailableWindowsProgram"), 404)
+    path = SAVE_AS[0](name)
+    if not path:
+        return {"path": None}  # Save As was cancelled
+    Path(path).write_bytes(file.file.read())
+    SAVED.add(path)
+    return {"path": path}
+
+
+@app.post("/api/saved/open")
+def open_saved(body: dict = Body(...)):
+    """A file saved by save_as, opened in its program, or shown in its folder (folder: true)."""
+    path = body.get("path")
+    if path not in SAVED or not Path(path).exists():
+        return refuse(msg("server.fileNotFound"), 404)
+    if body.get("folder"):
+        subprocess.Popen(["explorer", "/select,", path])
+    else:
+        os.startfile(path)  # noqa: S606 - a file the user just saved
+    return {"ok": True}
 
 
 @app.post("/api/restart")
@@ -364,11 +393,11 @@ def delete_draft(draft_id: str):
 
 
 @app.post("/api/drafts/{draft_id}/images")
-def upload_image(draft_id: str, file: UploadFile = File(...)):
+def upload_image(draft_id: str, file: UploadFile = File(...), fit: bool = Form(False)):
     raw = file.file.read(MAX_UPLOAD + 1)
     if len(raw) > MAX_UPLOAD:
         _err(413, msg("server.photoTooLargeLimitMb", limit=MAX_UPLOAD // 1024 ** 2))
-    return STORE.add_image(draft_id, raw)
+    return STORE.add_image(draft_id, raw, fit)  # fit: a photographed sheet, cut out and flattened
 
 
 @app.get("/api/drafts/{draft_id}/images/{name}")

@@ -380,6 +380,7 @@
           <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#arrows-clockwise"/></svg><span id="checkUpdateLabel"></span>
         </button>
       </div>
+      <button class="btn ghost small keys-open" id="btnKeys" type="button" data-i18n="ui.keyboardShortcuts"></button>
       <!-- a new window: the Windows program opens it in the browser (pywebview) -->
       <p class="muted small-print credit"><span data-i18n="ui.developedBy"></span> <a href="https://github.com/eyasbzour?tab=repositories" target="_blank" rel="noopener" dir="ltr">eyasbzour</a></p>
     </fieldset>
@@ -388,6 +389,19 @@
     <div class="dlg-actions">
       <button class="btn primary" value="done" formnovalidate data-i18n="ui.done"></button>
     </div>
+  </form>
+</dialog>
+
+<!-- keyboard shortcuts (app.js keys): from Settings, or ? outside a text field -->
+<dialog id="dlgKeys" aria-labelledby="keysTitle">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head">
+      <h2 id="keysTitle" data-i18n="ui.keyboardShortcuts"></h2>
+      <button class="btn ghost small icon-only" value="cancel" formnovalidate data-i18n-aria-label="ui.close">
+        <svg class="i" aria-hidden="true"><use href="vendor/icons.svg#x"/></svg>
+      </button>
+    </div>
+    <dl class="keys-list" id="keysList"></dl>
   </form>
 </dialog>
 

@@ -1,7 +1,7 @@
 """Engine registry: every way the app can read a page."""
 from __future__ import annotations
 
-from . import ai_engines, easyocr_engine, nuqta_engine, paddle_engine, tesseract_engine
+from . import ai_engines, easyocr_engine, nuqta_engine, paddle_engine, tesseract_engine, windows_engine
 import io
 import os
 from dataclasses import dataclass
@@ -89,6 +89,9 @@ READERS = [
     # the default second opinion for flagged words and paragraphs (nuqta_engine.py)
     Reader("nuqta", msg("reader.nuqtaMostAccurateArabicSlower"), "free", lambda: nuqta_engine.available(),
            lambda j: nuqta_engine.run(j.img, j.spot), low_conf=BOX_ENGINE_LOW_CONF, download=True),
+    # Windows' own reader: under a second a page and nothing to download, but it scores no word, so it flags none
+    Reader("windows", msg("reader.windowsFastest"), "free", lambda: windows_engine.available(),
+           lambda j: windows_engine.run(j.img)),
     _tesseract("best", msg("reader.tesseractBest")),
     Reader("easyocr", "EasyOCR", "free", lambda: easyocr_engine.available(),
            lambda j: easyocr_engine.run(j.img), low_conf=BOX_ENGINE_LOW_CONF, download=True),

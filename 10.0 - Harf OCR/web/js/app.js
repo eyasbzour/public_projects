@@ -24,10 +24,12 @@
     onclick: (e) => { e.stopPropagation(); fn(); } }, icon(name));
   const uid = () => Math.random().toString(36).slice(2, 10);
   let toastTimer;
-  function toast(msg, isErr) {
+  // actions: [[label, onclick]], buttons after the text (it then stays longer, to be reached)
+  function toast(msg, isErr, actions = []) {
     const t = $('toast');
-    t.textContent = msg; t.className = 'toast' + (isErr ? ' err' : '');
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add('hidden'), isErr ? 7000 : 3500);
+    t.replaceChildren(msg, ...actions.map(([label, fn]) => el('button', { type: 'button', class: 'toast-act', onclick: fn }, label)));
+    t.className = 'toast' + (isErr ? ' err' : '');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add('hidden'), isErr ? 7000 : actions.length ? 9000 : 3500);
   }
   async function api(path, opts = {}) {
     const res = await fetch(path, opts);
@@ -670,17 +672,36 @@
     const cmp = ORDERERS[orderMode()];
     items.sort((a, b) => cmp(a, b) || a.k - b.k);
     ws.flush();
-    let added = 0;
+    let added = 0, cut = 0;
     for (const it of items) {
       const fd = new FormData(); fd.append('file', it.f);
+      fd.append('fit', '1');  // a sheet photographed on a desk: cut out and flattened, the photo as taken kept (sheet.py)
       try {
         const r = await api(`/api/drafts/${draft.id}/images`, { method: 'POST', body: fd });
-        ws.addPages([{ id: uid(), image: r.name, file: it.file, fileTime: it.fileTime, rotation: 0, blocks: null, versions: [] }]);
+        const page = { id: uid(), image: r.name, file: it.file, fileTime: it.fileTime, rotation: 0, blocks: null, versions: [] };
+        if (r.original) { Object.assign(page, { original: r.original, edited: true }); cut++; }  // Restore original undoes it
+        ws.addPages([page]);
         added++; renderPages();
       } catch (e) { toast(tx('app.couldntUpload', { file: it.file, error: e.message }), true); }
     }
     if (added && draft.pages.length === added) showPage(0);
+    if (cut) toast(tx('app.sheetsCutFlattened'));
     return added;
+  }
+
+  // what was dropped: files, and the photos in dropped folders and their subfolders (read while the drop lasts:
+  // its items are gone after the handler returns)
+  function droppedFiles(dt) {
+    const entries = [...(dt.items || [])].map((it) => it.webkitGetAsEntry && it.webkitGetAsEntry()).filter(Boolean);
+    if (!entries.some((en) => en.isDirectory)) return Promise.resolve([...dt.files]);
+    const walk = (en) => (en.isFile ? new Promise((res) => en.file(res, () => res(null))) : new Promise((res) => {
+      const reader = en.createReader(), all = [];
+      const next = () => reader.readEntries((batch) => {  // a folder comes in batches of up to 100
+        if (batch.length) { all.push(...batch); next(); } else Promise.all(all.map(walk)).then((fs) => res(fs.flat()));
+      }, () => res([]));
+      next();
+    }));
+    return Promise.all(entries.map(walk)).then((fs) => fs.flat().filter(Boolean));
   }
 
   async function resortPages() {
@@ -1572,18 +1593,22 @@
       });
       const name = (draft.name || tx('app.documentFallback')).replace(/[\\/:*?"<>|]+/g, '-');
       const docxBlob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      let saved;
       if (fmt === 'docx') {
-        download(docxBlob, name + '.docx');
+        saved = await download(docxBlob, name + '.docx');
       } else {
         toast(tx('app.converting'));
         const fd = new FormData();
         fd.append('file', docxBlob, 'document.docx'); fd.append('format', fmt); fd.append('name', name);
         const res = await fetch('/api/convert', { method: 'POST', body: fd });
         if (!res.ok) { let m = tx('app.errorStatus', { status: res.status }); try { m = I18N.message(await res.json()) || m; } catch (e) { /* */ } throw new Error(m); }
-        download(await res.blob(), filenameFrom(res, name + '.' + fmt));
+        saved = await download(await res.blob(), filenameFrom(res, name + '.' + fmt));
       }
+      if (saved === null) return;  // Save As cancelled
       const flags = draft.pages.reduce((n, p) => n + countFlags(p.blocks), 0);
-      toast(flags ? tx('app.fileExportedHighlightedSpotsNotes', { n: flags }) : tx('app.fileExported'));
+      const open = (folder) => () => api('/api/saved/open', jsonOpts('POST', { path: saved, folder })).catch((e) => toast(e.message, true));
+      toast(flags ? tx('app.fileExportedHighlightedSpotsNotes', { n: flags }) : tx('app.fileExported'), false,
+        saved ? [[tx('app.openFile'), open(false)], [tx('app.showInFolder'), open(true)]] : []);
       if (ws.dirty) ws.save();
     } catch (e) { toast(tx('app.couldntExportFile', { error: e.message }), true); }
   }
@@ -1596,14 +1621,37 @@
     if (saved && FORMATS.some((f) => f.id === saved && f.available)) sel.value = saved;
   }
 
-  function download(blob, filename) {
+  // The Windows program: Save As, in the folder saved to last; gives the path, or null when cancelled.
+  // A browser downloads it (''), the phone too.
+  async function download(blob, filename) {
+    if (typeof appVersion === 'string') {
+      const fd = new FormData(); fd.append('file', blob, filename); fd.append('name', filename);
+      try { return (await api('/api/save-as', { method: 'POST', body: fd })).path; } catch (e) { if (e.status !== 404) throw e; }
+    }
     const a = el('a', { href: URL.createObjectURL(blob), download: filename });
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    return '';
   }
   function filenameFrom(res, fallback) {
     const cd = res.headers.get('Content-Disposition') || '';
     const m = cd.match(/filename\*=UTF-8''([^;]+)/i);
     return m ? decodeURIComponent(m[1]) : fallback;
+  }
+
+  // the keys that work, each with what it does: the app's own (below) and the text editor's (TipTap's StarterKit and
+  // TextAlign, editor.js mount)
+  const keys = () => [
+    [tx('keys.save'), ['Ctrl', 'S']], [tx('keys.close'), ['Esc']], [tx('keys.zoom'), ['Ctrl', tx('keys.wheel')]],
+    [tx('keys.bold'), ['Ctrl', 'B']], [tx('keys.italic'), ['Ctrl', 'I']], [tx('keys.underline'), ['Ctrl', 'U']],
+    [tx('keys.strike'), ['Ctrl', 'Shift', 'S']], [tx('keys.undo'), ['Ctrl', 'Z']], [tx('keys.redo'), ['Ctrl', 'Y']],
+    [tx('keys.heading'), ['Ctrl', 'Alt', '1 / 2 / 3']], [tx('keys.paragraph'), ['Ctrl', 'Alt', '0']],
+    [tx('keys.bullets'), ['Ctrl', 'Shift', '8']], [tx('keys.numbers'), ['Ctrl', 'Shift', '7']],
+    [tx('keys.align'), ['Ctrl', 'Shift', 'R / E / L / J']], [tx('keys.lineBreak'), ['Shift', 'Enter']], [tx('keys.thisList'), ['?']],
+  ];
+  function showKeys() {
+    $('keysList').replaceChildren(...keys().flatMap(([what, ks]) => [
+      el('dt', { dir: 'ltr' }, ...ks.flatMap((k, i) => (i ? [' + ', el('kbd', null, k)] : [el('kbd', null, k)]))), el('dd', null, what)]));
+    $('dlgKeys').showModal();
   }
 
   // ------------------------------------------------------------------ templates & settings
@@ -1704,6 +1752,7 @@
     $('setRemember').addEventListener('change', saveSettings);
     $('btnParts').onclick = () => { $('dlgSettings').close(); offerParts('nuqta'); };
     $('btnPhone').onclick = () => { refreshPhone(); $('dlgPhone').showModal(); };
+    $('btnKeys').onclick = () => { $('dlgSettings').close(); showKeys(); };
     $('phoneStart').onclick = () => phoneAction('/api/remote/start');
     $('phoneStop').onclick = () => phoneAction('/api/remote/stop');
     $('copyUrl').onclick = () => copyText('phoneUrl');
@@ -1743,7 +1792,7 @@
     const pages = document.querySelector('.pages');
     pages.addEventListener('dragover', (e) => { e.preventDefault(); if (dragFrom == null) pages.classList.add('drag'); });
     pages.addEventListener('dragleave', () => pages.classList.remove('drag'));
-    pages.addEventListener('drop', (e) => { e.preventDefault(); pages.classList.remove('drag'); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+    pages.addEventListener('drop', (e) => { e.preventDefault(); pages.classList.remove('drag'); if (e.dataTransfer.files.length) droppedFiles(e.dataTransfer).then(addFiles); });
 
     $('orderSel').value = store.get('order') || 'name';
     $('orderSel').onchange = () => store.set('order', $('orderSel').value, true);
@@ -1800,6 +1849,7 @@
     $('noteWord').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveNote(false); } });
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && draft) { e.preventDefault(); ws.save(); }
+      if (e.key === '?' && !e.target.closest('input, textarea, select, [contenteditable="true"]') && !document.querySelector('dialog[open]')) showKeys();
       if (e.key === 'Escape') {  // the window on top only: a list over a menu closes, the menu stays
         const top = topSheet(); if (!top) return;
         closeSheet(top);
@@ -1866,7 +1916,7 @@
     frame.addEventListener('drop', (e) => {
       frame.classList.remove('drag');
       if (!draft || draft.pages.length || !e.dataTransfer.files.length) return;
-      e.preventDefault(); addFiles(e.dataTransfer.files);
+      e.preventDefault(); droppedFiles(e.dataTransfer).then(addFiles);
     });
     document.querySelectorAll('.pane-tabs [role=tab]').forEach((t) => { t.onclick = () => setPane(t.dataset.pane); });
     // the word panel follows its word while the text scrolls, and closes once the word is out of view

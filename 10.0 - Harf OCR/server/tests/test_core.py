@@ -349,3 +349,34 @@ def test_underlined_and_bold_words_keep_their_style():
             assert w.fmt == ({kind: True} if w.text in styled else {}), (w.text, w.fmt)
     # and they reach the editor as styled pieces, the space after them plain
     assert words_to_segs(lines[0].words[2:6], 65) == [{"s": "the "}, {"s": "attached report", "u": True}, {"s": " "}, {"s": "before"}]
+
+
+def test_windows_reader_keeps_english_runs_left_to_right():
+    from engines.common import Word
+    from engines.windows_engine import _rtl_order
+    # one box a word, right to left as on an Arabic page: the English run turns back around, its number with it
+    words = [Word(t, 100, None) for t in ["راجع", "report", "attached", "the", "2026", "اليوم"]]
+    assert [w.text for w in _rtl_order(words)] == ["راجع", "2026", "the", "attached", "report", "اليوم"]
+
+
+def test_a_sheet_on_a_desk_is_found_and_a_scan_is_left_alone():
+    import cv2
+    import numpy as np
+    from PIL import Image, ImageDraw
+    from sheet import find_sheet, flatten
+    page = Image.new("RGB", (620, 877), (245, 245, 240))
+    d = ImageDraw.Draw(page)
+    for y in range(80, 800, 40):  # lines of text, and a table's frame around some of them
+        d.rectangle((60, y, 560, y + 12), fill=(30, 30, 30))
+    d.rectangle((40, 300, 580, 600), outline=(0, 0, 0), width=4)
+    corners = np.float32([[300, 250], [1250, 180], [1350, 1700], [200, 1800]])
+    m = cv2.getPerspectiveTransform(np.float32([[0, 0], [620, 0], [620, 877], [0, 877]]), corners)
+    desk = np.full((2000, 1500, 3), (70, 55, 45), np.uint8)
+    warped = cv2.warpPerspective(np.asarray(page), m, (1500, 2000))
+    mask = cv2.warpPerspective(np.full((877, 620), 255, np.uint8), m, (1500, 2000)) > 0
+    desk[mask] = warped[mask]
+    found = find_sheet(Image.fromarray(desk))
+    assert found is not None and np.abs(found - corners).max() < 20
+    flat = flatten(Image.fromarray(desk), found)
+    assert flat.height > flat.width  # upright, as the page is
+    assert find_sheet(page) is None  # the page itself, edge to edge: its table's frame is not a sheet

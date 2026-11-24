@@ -142,7 +142,8 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} $
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: c.x0, y: c.y0 }] });
   for (let i = 1; i <= 8; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: c.x0 + (c.x1 - c.x0) * i / 8, y: c.y0 + (c.y1 - c.y0) * i / 8 }] });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  check('a finger draws the box, and the sheet stays put', await page.isVisible('#lineBox') && Math.abs((await rect('#linePop')).y - top0) < 2);
+  const box1 = await page.isVisible('#lineBox'), top1 = (await rect('#linePop')).y;
+  check('a finger draws the box, and the sheet stays put', box1 && Math.abs(top1 - top0) < 2, JSON.stringify({ box1, top0, top1, c, crop: await rect('#lineCrop'), pickPressed: await page.$eval('#linePickPart', (b) => b.getAttribute('aria-pressed')) }));
   await shot('line-pick');
   await page.tap('#linePickInsert');
   check('the part goes into the text', await until((n) => document.querySelectorAll('#editor figure.fig').length === n + 1, figs0), await page.evaluate(() => JSON.stringify({ toast: (document.querySelector('.toast') || {}).textContent, pop: !document.getElementById('linePop').classList.contains('hidden'), figs: document.querySelectorAll('#editor figure, #editor .fig').length, inCell: !!document.querySelector("#editor td figure, #editor th figure") })));

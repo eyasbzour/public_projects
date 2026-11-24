@@ -669,6 +669,8 @@ fieldset > .btn { justify-self: start; }  /* a rare action, not a field: its own
 .line-pop .note-status > .i { color: var(--muted); }
 .line-which .btn { min-height: 1.75rem; padding-inline: .6rem; }
 .line-body, .line-result { display: grid; gap: .55rem; }
+/* one column the sheet's width: a long reader name in the reader list made it wider than a phone's screen */
+.note-pop, .line-body, .line-result { grid-template-columns: minmax(0, 1fr); }
 .line-crop { overflow: auto; max-height: 13rem; background: var(--well); border-radius: var(--r-ctl); overscroll-behavior: contain; }
 .line-crop canvas { display: block; }
 .line-shot { position: relative; width: max-content; min-width: 100%; }
@@ -683,6 +685,18 @@ fieldset > .btn { justify-self: start; }  /* a rare action, not a field: its own
 
 .toast { position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%); z-index: 60; max-width: min(34rem, 92vw); padding: .7rem 1.1rem; border-radius: var(--r-panel); background: var(--ink); color: var(--surface); font-size: var(--fs-sm); box-shadow: var(--shadow-2); animation: toast-in .2s var(--ease); }
 .toast.err { background: var(--danger); color: oklch(99% 0.005 27); }
+/* keyboard shortcuts: the keys, then what they do */
+.keys-list { display: grid; grid-template-columns: max-content 1fr; gap: .55rem 1.25rem; margin: .75rem 0 0; align-items: center; }
+.keys-list dt { justify-self: end; white-space: nowrap; color: var(--muted); }
+.keys-list dd { margin: 0; }
+.keys-list kbd { display: inline-block; min-width: 1.6em; padding: .1rem .4rem; font: inherit; font-size: var(--fs-xs); text-align: center;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px; }
+.keys-open { margin-top: .75rem; }
+/* the buttons after a message (an export: open the file, show it in its folder) */
+.toast-act { margin-inline-start: .75rem; padding: .2rem .55rem; font: inherit; font-weight: 600; color: inherit; background: none;
+  border: 1px solid color-mix(in oklch, currentColor 45%, transparent); border-radius: var(--r-ctl); cursor: pointer; }
+.toast-act:hover { background: color-mix(in oklch, currentColor 12%, transparent); }
+.toast-act:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
 
 /* ---------------------------------------------------------------- image editor */
